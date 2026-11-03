@@ -120,7 +120,8 @@ WHERE {
 			)
 		) AS ?new_signature_id
 	)
-	BIND(IRI(CONCAT(STR(sigs:), ENCODE_FOR_URI(STR(?new_signature_id)))) AS ?new_signature)
+	# Level-specific IRI (see signatures-base.ru): the id alone is not unique across levels.
+	BIND(IRI(CONCAT(STR(sigs:), STR(?next_signature_level_value), '/', ENCODE_FOR_URI(STR(?new_signature_id)))) AS ?new_signature)
 
 }
 
