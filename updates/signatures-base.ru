@@ -113,7 +113,11 @@ WHERE {
 				?dt_signature,
 				'')) AS ?new_signature_id)
 
-	BIND(IRI(CONCAT(STR(sigs:), ENCODE_FOR_URI(STR(?new_signature_id)))) AS ?new_signature)
+	# The level is part of the signature IRI: the same id string can occur at
+	# several levels (e.g. a resource without object links keeps its level-0 id
+	# at every level), and a shared node would end up with several sig:level
+	# values, making other resources appear to have several signatures per level.
+	BIND(IRI(CONCAT(STR(sigs:), '0/', ENCODE_FOR_URI(STR(?new_signature_id)))) AS ?new_signature)
 
 };
 
