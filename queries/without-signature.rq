@@ -1,0 +1,19 @@
+BASE <https://w3id.org/hacid/data/>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
+PREFIX sig: <https://w3id.org/sig/>
+PREFIX sigdata: <sig/>
+PREFIX siglevels: <sig/levels/>
+PREFIX sigs: <sig/signatures/>
+
+SELECT *
+WHERE {
+  ?s ?p ?o
+  FILTER NOT EXISTS {
+    GRAPH sigdata:graph {
+      ?s sig:hasSignature ?sig
+    }
+  }
+}
+LIMIT 100

@@ -1,0 +1,35 @@
+BASE <https://w3id.org/hacid/data/>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
+PREFIX sig: <https://w3id.org/sig/>
+PREFIX sigdata: <sig/>
+PREFIX siglevels: <sig/levels/>
+PREFIX sigs: <sig/signatures/>
+
+SELECT ?i ?sig_id ?sig
+WHERE {
+{
+    SELECT
+      ?sig_level ?i
+      (COUNT(1) as ?signatures)
+    WHERE {
+      GRAPH sigdata:graph {
+        ?i sig:hasSignature [
+            sig:level siglevels:1;
+            sig:id ?sig_id
+        ]
+      }
+    }
+    GROUP BY
+       ?sig_level ?i
+  }
+  FILTER(?signatures = 2)
+  ?i sig:hasSignature ?sig.
+  ?sig
+      sig:level siglevels:1;
+      sig:id ?sig_id
+ 
+}
+ORDER BY ?i ?sig_id
+LIMIT 10
