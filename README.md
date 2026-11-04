@@ -43,6 +43,7 @@ What exists today:
 | `queries/convergence.rq` | Signature count per level compared with the previous level; tells when more levels stop being useful. |
 | `queries/duplicate-shapes.rq` | Sanity check: resources with more than one level-1 signature (expected: none). |
 | `queries/without-signature.rq` | Triples whose subject has no signature. |
+| `scripts/sig-converge.sh` | Computes levels one after another until the partition converges (optionally starting from level 0). |
 | `scripts/*.sh` | Wrappers around the Apache Jena command-line tools (see below). |
 | `kg/config/kg-config.ttl` | TDB2 dataset + Fuseki service configuration. |
 | `docs/signatures.md` | Detailed description of the signature format and data model. |
@@ -78,6 +79,18 @@ Run every script from the repository root.
    ```
    Once `queries/convergence.rq` reports `converged = true` for the last
    level, more levels won't separate any more resources.
+
+   Alternatively, let the loop script do steps 3 and 4, stopping at
+   convergence:
+   ```sh
+   scripts/sig-converge.sh --base                 # from level 0 to convergence
+   scripts/sig-converge.sh                        # continue from the last level
+   scripts/sig-converge.sh --base --max-levels 5  # at most 5 levels after level 0
+   ```
+   It exits with status 0 when converged and 2 when `--max-levels` was reached
+   first. The last level it computes is the one that confirms convergence, so
+   it duplicates the previous level's partition. `TDB_ARGS` overrides the
+   dataset options (default `--tdb=kg/config/kg-config.ttl`).
 5. Inspect the results:
    ```sh
    scripts/check.sh

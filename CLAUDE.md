@@ -23,8 +23,8 @@ exact signature format and data model before changing the updates.
 ## Running things
 
 There is no build and no test suite. The user runs the pipeline on a large KG
-with the scripts (`load.sh`, `sig-base.sh`, `sig-rec.sh` repeated,
-`check.sh`). That KG is not in the repo.
+with the scripts (`load.sh`, `sig-base.sh`, `sig-rec.sh` repeated or
+`sig-converge.sh`, `check.sh`). That KG is not in the repo.
 
 To check a change, use a small hand-written graph in a scratch directory, not
 the repo:
@@ -37,6 +37,10 @@ $J/tdb2.tdbupdate $O --update <repo>/updates/signatures-base.ru
 $J/tdb2.tdbupdate $O --update <repo>/updates/signatures-rec.ru   # repeat per level
 $J/tdb2.tdbquery  $O --query  <repo>/queries/signatures.rq
 ```
+
+`scripts/sig-converge.sh` can run the same way from the repo root, with the
+Jena `bin` directory on the `PATH` and
+`TDB_ARGS="--loc=<scratch>/tdb2 --set=tdb:unionDefaultGraph=true"`.
 
 Use `--loc` + `--set` rather than `--tdb=kg/config/kg-config.ttl`: Jena 5.2's
 `tdb2.*` tools reject that config file's dataset type.
