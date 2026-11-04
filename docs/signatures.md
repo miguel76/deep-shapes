@@ -133,9 +133,8 @@ level.** `queries/duplicate-shapes.rq` checks this for level 1.
   `tdb2:unionDefaultGraph true`, queries over the default graph (including the
   updates themselves and `queries/without-signature.rq`) also see the
   signature triples.
-- **`queries/duplicate-shapes.rq`** uses `FILTER(?signatures = 2)`, so it
-  misses resources with 3 or more signatures, and its `?sig_level` grouping
-  variable is never bound.
+- **`queries/duplicate-shapes.rq`** groups by `?sig_level`, but that
+  variable is never bound (the query only looks at level 1).
 - **Config file and Jena 5.x.** With Jena 5.2, the `tdb2.*` tools reject
   `kg/config/kg-config.ttl` ("No such type ... DatasetTDB2"); using
   `--loc=kg/tdb2 --set=tdb:unionDefaultGraph=true` works instead.

@@ -24,7 +24,7 @@ WHERE {
     GROUP BY
        ?sig_level ?i
   }
-  FILTER(?signatures = 2)
+  FILTER(?signatures > 1)
   ?i sig:hasSignature ?sig.
   ?sig
       sig:level siglevels:1;
