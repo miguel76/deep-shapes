@@ -28,18 +28,22 @@ WHERE {
 	{
 		SELECT
 			?i
-			(SHA1(GROUP_CONCAT(CONCAT('<',STR(?i_type),'>'))) AS ?i_type_signature_id)
+			(SHA1(COALESCE(GROUP_CONCAT(CONCAT('<',STR(?i_type),'>')), '')) AS ?i_type_signature_id)
 		WHERE {
 			SELECT DISTINCT ?i ?i_type
 			WHERE {
-				{
-					?i ?p_out ?o
-				} UNION {
-					?s ?p_in ?i
-					FILTER(isIRI(?i) || isBLANK(?i))
+				GRAPH ?g {
+					{
+						?i ?p_out ?o
+					} UNION {
+						?s ?p_in ?i
+						FILTER(isIRI(?i) || isBLANK(?i))
+					}
 				}
+				FILTER(?g != sigdata:graph)
 				OPTIONAL {
-					?i a ?i_type
+					GRAPH ?g_type { ?i a ?i_type }
+					FILTER(?g_type != sigdata:graph)
 				}
 				# FILTER NOT EXISTS {
 				# 	?i rdf:type/rdfs:subClassOf+ ?i_type
@@ -60,11 +64,11 @@ INSERT {
 }
 WHERE {
 	{
-		SELECT ?i_type_signature (SAMPLE(?i) AS ?i)
+		SELECT ?i_type_signature (SAMPLE(?i_member) AS ?i)
 		WHERE {
 			?i_type_signature a sig:TypeSignature;
 				sig:level siglevels:0.
-			?i sig:hasTypeSignature ?i_type_signature.
+			?i_member sig:hasTypeSignature ?i_type_signature.
 		}
 		GROUP BY ?i_type_signature
 	}
@@ -93,8 +97,8 @@ WHERE {
 		WHERE {
 			SELECT ?i ?o ?p
 			WHERE {
-				?i ?p ?o.
-				FILTER(?p != rdf:type && isLITERAL(?o)).
+				GRAPH ?g { ?i ?p ?o }
+				FILTER(?g != sigdata:graph && ?p != rdf:type && isLITERAL(?o)).
 				# FILTER NOT EXISTS {
 				# 	?i ?p_spec ?o.
 				# 	?p_spec rdfs:subPropertyOf+ ?p.
@@ -118,11 +122,11 @@ INSERT {
 }
 WHERE {
 	{
-		SELECT ?datatype_path_signature (SAMPLE(?source_target) AS ?source_target)
+		SELECT ?datatype_path_signature (SAMPLE(?st) AS ?source_target)
 		WHERE {
 			?datatype_path_signature a sig:DatatypePathSignature;
 				sig:level siglevels:0;
-				sig:hasSourceTargetPair ?source_target.
+				sig:hasSourceTargetPair ?st.
 		}
 		GROUP BY ?datatype_path_signature
 	}
@@ -143,7 +147,8 @@ INSERT {
 			sig:level siglevels:0;
 			sig:id ?datatype_property_signature_id;
 			sig:hasDatatypePathSignature ?datatype_path_signature;
-			sig:hasValueCount ?datatype_value_count.
+			sig:hasExactValueCount ?exact_datatype_value_count;
+			sig:hasMinValueCount ?min_datatype_value_count.
 		?i sig:hasDatatypePropertySignature ?datatype_property_signature
 	}
 }
@@ -189,15 +194,16 @@ INSERT {
 WHERE {
 	{
 		SELECT
-			?i ?i_type_signature
+			?i ?i_type_signature_id
 			(GROUP_CONCAT(?datatype_property_signature_id) AS ?dt_signature)
 		WHERE {
 			SELECT
-				?i ?i_type_signature
+				?i ?i_type_signature ?i_type_signature_id
 				?datatype_property_signature ?datatype_property_signature_id
 			WHERE {
 				GRAPH sigdata:graph {
 					?i sig:hasTypeSignature ?i_type_signature.
+					?i_type_signature sig:id ?i_type_signature_id.
 					OPTIONAL {
 						?i sig:hasDatatypePropertySignature ?datatype_property_signature.
 						?datatype_property_signature a sig:DatatypePropertySignature;
@@ -210,13 +216,11 @@ WHERE {
 				?i ?datatype_property_signature_id
 		}
 		GROUP BY
-			?i ?i_type_signature
+			?i ?i_type_signature_id
 	}
 
   	BIND(
-		SHA1(IF(BOUND(?dt_signature),
-				CONCAT(?i_type_signature, ';', ?dt_signature),
-				?i_type_signature))
+		SHA1(CONCAT(?i_type_signature_id, ';', COALESCE(?dt_signature, '')))
 		AS ?base_node_signature_id
 	)
 
