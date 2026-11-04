@@ -122,7 +122,9 @@ RDF vocabulary used, and known limitations.
 The tests run the real updates and scripts with Jena on small graphs, each in
 a temporary TDB2 store. They need Python 3 (standard library only) and the
 Jena tools on the `PATH`, or `JENA_HOME` pointing to a Jena distribution;
-without Jena they are skipped. From the repository root:
+without Jena they are skipped (unless `REQUIRE_JENA=1` is set). They also run
+on GitHub Actions on every push and pull request
+(`.github/workflows/tests.yml`). From the repository root:
 
 ```sh
 python3 -m unittest discover -s tests -v

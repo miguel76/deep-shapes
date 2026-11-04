@@ -36,7 +36,10 @@ Run the test suite after any change to the updates, queries or scripts:
 JENA_HOME=/path/to/apache-jena-5.x python3 -m unittest discover -s tests -v
 ```
 
-It takes a few minutes (run it in the background). Get Jena from
+It takes a few minutes (run it in the background). CI runs the same suite on
+every push and pull request (`.github/workflows/tests.yml`, Jena 5.2.0,
+`REQUIRE_JENA=1` so a missing Jena fails instead of skipping); keep the
+Jena version and checksum there in sync if you change it. Get Jena from
 archive.apache.org/dist/jena/binaries/ if it isn't installed. If a change to
 the id format is intended, regenerate the snapshot with `UPDATE_SNAPSHOTS=1`
 and check the diff of `tests/expected/`. New test graphs belong in

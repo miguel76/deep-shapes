@@ -6,7 +6,8 @@ Run from the repository root:
 
 The Jena command-line tools (tdb2.tdbloader, tdb2.tdbupdate, tdb2.tdbquery,
 shacl) must be on the PATH, or JENA_HOME must point to a Jena distribution;
-otherwise every test is skipped. Set UPDATE_SNAPSHOTS=1 to rewrite the
+otherwise every test is skipped (or, with REQUIRE_JENA=1, the run fails,
+as in CI). Set UPDATE_SNAPSHOTS=1 to rewrite the
 snapshot in tests/expected/ instead of comparing against it (check the diff!).
 
 Each test case builds a TDB2 store in a temporary directory, runs the real
@@ -39,6 +40,8 @@ def find_jena_bin():
 
 
 JENA_BIN = find_jena_bin()
+if JENA_BIN is None and os.environ.get("REQUIRE_JENA"):
+    raise RuntimeError("REQUIRE_JENA is set but Apache Jena was not found (set JENA_HOME or PATH)")
 
 
 @unittest.skipIf(JENA_BIN is None, "Apache Jena not found (set JENA_HOME or PATH)")
