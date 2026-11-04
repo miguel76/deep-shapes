@@ -123,7 +123,7 @@ The tests run the real updates and scripts with Jena on small graphs, each in
 a temporary TDB2 store. They need Python 3 (standard library only) and the
 Jena tools on the `PATH`, or `JENA_HOME` pointing to a Jena distribution;
 without Jena they are skipped (unless `REQUIRE_JENA=1` is set). They also run
-on GitHub Actions on every push and pull request
+on GitHub Actions on every push
 (`.github/workflows/tests.yml`). From the repository root:
 
 ```sh
