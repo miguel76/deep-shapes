@@ -53,6 +53,11 @@ dataset relies on the union default graph.
   The same id string can legitimately appear at several levels (a resource with
   no object links keeps its level-0 id), so dropping the level from the IRI
   reintroduces duplicate signatures.
+- From level 2 on, `signatures-rec.ru` references targets as `#` + SHA1 of
+  their previous-level id (level 1 embeds full level-0 ids). Embedding full ids
+  at every level makes ids grow exponentially on cyclic data.
+- Convergence is detected by signature counts per level, not by ids: on cyclic
+  data ids keep changing even when the partition is stable.
 - Ids must be deterministic for a given structure: keep the `ORDER BY` before
   every `GROUP_CONCAT`.
 - The signature graph is part of the default graph (union). Any new pattern

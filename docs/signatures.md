@@ -80,11 +80,18 @@ where each group describes outgoing non-`rdf:type` links to resources that
 have a level-n signature:
 
 ```
-<p1>|<p2> [<level-n id of the target>] (count)
+<p1>|<p2> [<target ref>] (count)
 ```
 
 - `<p1>|<p2>` is the set of properties linking the resource to the same
   target.
+- `<target ref>` identifies the target's level-n signature:
+  - at **level 1** it is the target's full level-0 id, so level-1 ids are
+    readable on their own;
+  - from **level 2** on it is `#` followed by the SHA-1 (hex) of the target's
+    level-n id. Embedding full ids would nest every previous level, making ids
+    grow exponentially on cyclic data. With hashes, an id's length depends only
+    on the resource's level-0 id and its number of link groups.
 - `(count)` is the number of distinct targets with that property set and
   target signature (`n` when greater than 5).
 - If the resource has no such links, its id at level n+1 equals its level-0 id.
@@ -95,6 +102,20 @@ Example, `ex:alice` at level 1:
 
 ```
 <level-0 id of ex:alice>; <http://ex.org/knows> [a <http://ex.org/Person>;<http://ex.org/name> ^^<http://www.w3.org/2001/XMLSchema#string> (1)] (1);<http://ex.org/livesIn> [a <http://ex.org/City>] (1)
+```
+
+The same resource at level 2:
+
+```
+<level-0 id of ex:alice>; <http://ex.org/knows> [#1c3e63c840f97fefec28689493b24e02ffe7ac3d] (1);<http://ex.org/livesIn> [#16250d1c5c8c813ff0481e66908d9cada20d4686] (1)
+```
+
+To resolve a reference `#h` in a level-(n+1) id, look for the level-n
+signature whose id hashes to `h`:
+
+```sparql
+?target_sig sig:level <sig/levels/1> ; sig:id ?target_id .
+FILTER(SHA1(?target_id) = "1c3e63c840f97fefec28689493b24e02ffe7ac3d")
 ```
 
 Incoming links are not part of the signature.
@@ -154,10 +175,12 @@ By induction on n:
 Capping counts at `n` therefore does not break refinement. It only makes each
 P(n) coarser than it would be with exact counts.
 
-The argument assumes the ids are unambiguous strings, i.e. two different
-structures never produce the same id. That holds because IRIs are written
-between `<` and `>`, which cannot occur inside an IRI, and nested ids are
-wrapped in balanced `[`…`]`.
+The argument assumes the ids are unambiguous, i.e. two different structures
+never produce the same id. That holds because IRIs are written between `<` and
+`>`, which cannot occur inside an IRI, and target references are wrapped in
+balanced `[`…`]`. From level 2 on it also assumes SHA-1 has no collisions
+among the signature ids of a level, which is safe in practice for accidental
+collisions.
 
 ### Convergence
 
@@ -174,12 +197,12 @@ this happens after at most (number of signed resources − number of level-0
 signatures) levels. A chain of k nodes that differ only by their distance to
 the end needs about k levels.
 
-Partitions converge, but ids don't. On acyclic data the ids eventually stop
-changing. With cycles, each level's ids embed the previous level's, so they
-keep growing (see below). If deep levels are needed, a cheaper encoding would
-be to refer to targets by a short identifier of their level-n signature (e.g.
-a hash, or the signature IRI) instead of embedding the full id. The partitions
-would be the same, at the cost of ids that aren't human-readable on their own.
+Partitions converge, but ids need not. On acyclic data the ids eventually stop
+changing. With cycles, a resource's id references its targets' previous-level
+ids, which keep changing, so the ids change at every level even after the
+partition is stable: they are just renamed. Detect convergence by comparing
+signature **counts** between levels, not ids. Since targets are referenced by
+hash from level 2 on, id length stays bounded either way.
 
 ### Empirical check
 
@@ -188,9 +211,13 @@ query that looks for two resources with the same level-(n+1) signature but
 different level-n signatures (none were found at any level):
 
 - an 80-node random graph with out-degrees up to 9 (so the cap is exercised):
-  6 signatures at level 0, then 78 from level 1 through level 6;
+  6 signatures at level 0, then 78 from level 1 through level 10. The longest
+  id is 794 characters at level 1 and 1,055 from level 2 on. Before targets
+  were hashed it grew to 9.4 million characters at level 6, and level 7 ran
+  out of memory. The partition is stable from level 1, but the ids of the 74
+  resources with links change at every level (the graph has cycles);
 - a 9-node chain of typed nodes: 2, 3, 4, …, 10 signatures at levels 0–8, then
-  stable at 10.
+  stable at 10, and from then on the ids no longer change either.
 
 ## Known limitations and quirks
 
@@ -198,12 +225,9 @@ different level-n signatures (none were found at any level):
   subqueries and then `GROUP_CONCAT`. SPARQL doesn't guarantee that
   `GROUP_CONCAT` follows that order; Jena does in practice, but another engine
   might produce different ids for the same structure.
-- **Ids keep growing after convergence when the graph has cycles.** Each level
-  nests the previous level's ids, so on cyclic data the longest id grows by
-  roughly the out-degree factor per level, even once the partition no longer
-  changes (see [Convergence](#convergence)). On an 80-node random test graph
-  the longest id went from 794 characters at level 1 to 9.4 million at level 6,
-  and Jena ran out of heap computing level 7.
+- **Ids from level 2 on are not self-describing.** Target references are
+  hashes, so reading one requires looking up the target's signature at the
+  previous level (see the query above).
 - **The signature graph is visible in the default graph.** Because of
   `tdb2:unionDefaultGraph true`, queries over the default graph (including the
   updates themselves and `queries/without-signature.rq`) also see the
