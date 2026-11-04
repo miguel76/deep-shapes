@@ -51,6 +51,13 @@ a <Type1>,<Type2>;<group1>;<group2>;...
     when it is greater than 5.
 - Object (non-literal) values are ignored at this level.
 
+Parts that would be empty are left out. A resource with no types starts
+directly with its literal groups, and a resource with neither types nor
+literals (e.g. a class such as `ex:City` above) gets the **empty id `""`**.
+This is intended: resources with no outgoing edges at all, typically
+classes or other resources that only appear as objects, keep the empty id at
+every level. A different representation may be adopted later.
+
 Example, for `ex:alice`:
 
 ```
@@ -81,6 +88,8 @@ have a level-n signature:
 - `(count)` is the number of distinct targets with that property set and
   target signature (`n` when greater than 5).
 - If the resource has no such links, its id at level n+1 equals its level-0 id.
+- If the level-0 id is empty, the level-n+1 id is just the link groups (no
+  leading `; `).
 
 Example, `ex:alice` at level 1:
 
@@ -118,10 +127,6 @@ level.** `queries/duplicate-shapes.rq` checks this for level 1.
 
 ## Known limitations and quirks
 
-- **Untyped resources get an empty level-0 id.** A resource with no type and no
-  literals (e.g. a class, `ex:City` above) gets the id `""` instead of `"a "`.
-  Jena seems to turn `GROUP_CONCAT` over an unbound `?i_type` into an error,
-  leaving `?i_type_sig` unbound.
 - **Ordering inside ids relies on Jena.** The updates sort with `ORDER BY` in
   subqueries and then `GROUP_CONCAT`. SPARQL doesn't guarantee that
   `GROUP_CONCAT` follows that order; Jena does in practice, but another engine
@@ -133,8 +138,6 @@ level.** `queries/duplicate-shapes.rq` checks this for level 1.
   `tdb2:unionDefaultGraph true`, queries over the default graph (including the
   updates themselves and `queries/without-signature.rq`) also see the
   signature triples.
-- **`queries/duplicate-shapes.rq`** groups by `?sig_level`, but that
-  variable is never bound (the query only looks at level 1).
 - **Config file and Jena 5.x.** With Jena 5.2, the `tdb2.*` tools reject
   `kg/config/kg-config.ttl` ("No such type ... DatasetTDB2"); using
   `--loc=kg/tdb2 --set=tdb:unionDefaultGraph=true` works instead.

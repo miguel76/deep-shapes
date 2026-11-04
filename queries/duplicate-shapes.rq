@@ -11,7 +11,7 @@ SELECT ?i ?sig_id ?sig
 WHERE {
 {
     SELECT
-      ?sig_level ?i
+      ?i
       (COUNT(1) as ?signatures)
     WHERE {
       GRAPH sigdata:graph {
@@ -22,7 +22,7 @@ WHERE {
       }
     }
     GROUP BY
-       ?sig_level ?i
+       ?i
   }
   FILTER(?signatures > 1)
   ?i sig:hasSignature ?sig.
