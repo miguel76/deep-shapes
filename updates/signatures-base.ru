@@ -9,115 +9,222 @@ PREFIX sigs: <sig/signatures/>
 
 DROP SILENT GRAPH sigdata:graph;
 
+INSERT DATA {
+	GRAPH sigdata:graph {
+		siglevels:0 a sig:SignatureLevel;
+			sig:levelValue 0.
+	}
+};
+
+INSERT {
+	GRAPH sigdata:graph {
+		?i_type_signature a sig:TypeSignature;
+			sig:level siglevels:0;
+			sig:id ?i_type_signature_id.
+		?i sig:hasTypeSignature ?i_type_signature
+	}
+}
+WHERE {
+	{
+		SELECT
+			?i
+			(SHA1(GROUP_CONCAT(CONCAT('<',STR(?i_type),'>'))) AS ?i_type_signature_id)
+		WHERE {
+			SELECT DISTINCT ?i ?i_type
+			WHERE {
+				{
+					?i ?p_out ?o
+				} UNION {
+					?s ?p_in ?i
+					FILTER(isIRI(?i) || isBLANK(?i))
+				}
+				OPTIONAL {
+					?i a ?i_type
+				}
+				# FILTER NOT EXISTS {
+				# 	?i rdf:type/rdfs:subClassOf+ ?i_type
+				# }
+			}
+			ORDER BY ?i ?i_type
+		}
+		GROUP BY ?i
+	}
+	BIND(IRI(CONCAT(STR(sigs:), 'types/0/', ENCODE_FOR_URI(STR(?i_type_signature_id)))) AS ?i_type_signature)
+};
+
+INSERT {
+	GRAPH sigdata:graph {
+		?i_type_signature
+			sig:hasMemberType ?i_type.
+	}
+}
+WHERE {
+	{
+		SELECT ?i_type_signature (SAMPLE(?i) AS ?i)
+		WHERE {
+			?i_type_signature a sig:TypeSignature;
+				sig:level siglevels:0.
+			?i sig:hasTypeSignature ?i_type_signature.
+		}
+		GROUP BY ?i_type_signature
+	}
+	?i a ?i_type.
+	# FILTER NOT EXISTS {
+	# 	?i rdf:type/rdfs:subClassOf+ ?i_type
+	# }
+};
+
+INSERT {
+	GRAPH sigdata:graph {
+		?datatype_path_signature a sig:DatatypePathSignature;
+			sig:level siglevels:0;
+			sig:id ?datatype_path_signature_id;
+			sig:hasSourceTargetPair [
+				sig:source ?i;
+				sig:target ?o
+			].
+	}
+}
+WHERE {
+	{
+		SELECT
+			?i ?o
+			(GROUP_CONCAT(CONCAT('<',STR(?p),'>'); separator="|") AS ?link_signature_str)
+		WHERE {
+			SELECT ?i ?o ?p
+			WHERE {
+				?i ?p ?o.
+				FILTER(?p != rdf:type && isLITERAL(?o)).
+				# FILTER NOT EXISTS {
+				# 	?i ?p_spec ?o.
+				# 	?p_spec rdfs:subPropertyOf+ ?p.
+				# }
+			}
+			ORDER BY ?i ?o ?p
+		}
+		GROUP BY ?i ?o
+	}
+	BIND(DATATYPE(?o) AS ?o_type)
+	BIND(LANG(?o) AS ?o_lang)
+	BIND(CONCAT(' ^^<', STR(?o_type), '>', IF(?o_lang, CONCAT(' @', STR(?o_lang)), '')) AS ?o_signature_str)
+	BIND(SHA1(CONCAT(?link_signature_str, ?o_signature_str)) AS ?datatype_path_signature_id)
+	BIND(IRI(CONCAT(STR(sigs:), 'datatype-values/0/', ENCODE_FOR_URI(?datatype_path_signature_id))) AS ?datatype_path_signature)
+};
+
+INSERT {
+	GRAPH sigdata:graph {
+		?datatype_path_signature sig:hasMemberProperty ?p.
+	}
+}
+WHERE {
+	{
+		SELECT ?datatype_path_signature (SAMPLE(?source_target) AS ?source_target)
+		WHERE {
+			?datatype_path_signature a sig:DatatypePathSignature;
+				sig:level siglevels:0;
+				sig:hasSourceTargetPair ?source_target.
+		}
+		GROUP BY ?datatype_path_signature
+	}
+	?source_target
+		sig:source ?source;
+		sig:target ?target.
+	?source ?p ?target.
+	FILTER(?p != rdf:type && isLITERAL(?target)).
+	# FILTER NOT EXISTS {
+	# 	?i ?p_spec ?o.
+	# 	?p_spec rdfs:subPropertyOf+ ?p.
+	# }
+};
+
+INSERT {
+	GRAPH sigdata:graph {
+		?datatype_property_signature a sig:DatatypePropertySignature;
+			sig:level siglevels:0;
+			sig:id ?datatype_property_signature_id;
+			sig:hasDatatypePathSignature ?datatype_path_signature;
+			sig:hasValueCount ?datatype_value_count.
+		?i sig:hasDatatypePropertySignature ?datatype_property_signature
+	}
+}
+WHERE {
+	{
+		SELECT
+			?i ?datatype_path_signature ?datatype_path_signature_id
+			(COUNT(DISTINCT ?o) AS ?datatype_value_count)
+		WHERE {
+			GRAPH sigdata:graph {
+				?datatype_path_signature a sig:DatatypePathSignature;
+					sig:level siglevels:0;
+					sig:id ?datatype_path_signature_id;
+					sig:hasSourceTargetPair [
+						sig:source ?i;
+						sig:target ?o
+					].
+			}
+		}
+		GROUP BY
+			?i ?datatype_path_signature ?datatype_path_signature_id
+	}
+	VALUES ?count_limit {5}
+	VALUES ?undef {UNDEF}
+	BIND(IF(?datatype_value_count > ?count_limit, ?undef, ?datatype_value_count) AS ?exact_datatype_value_count)
+	BIND(IF(?datatype_value_count > ?count_limit, ?count_limit + 1, ?undef) AS ?min_datatype_value_count)
+	BIND(IF(?datatype_value_count > ?count_limit, 'n', STR(?datatype_value_count)) AS ?datatype_value_count_str)
+	BIND(SHA1(CONCAT(?datatype_path_signature_id, ?datatype_value_count_str)) AS ?datatype_property_signature_id)
+	BIND(IRI(CONCAT(STR(sigs:), 'datatype-properties/0/', ENCODE_FOR_URI(?datatype_property_signature_id))) AS ?datatype_property_signature)
+};
+
+
 INSERT {
 	GRAPH sigdata:graph {
 		siglevels:0 a sig:SignatureLevel;
 			sig:levelValue 0.
-		?new_signature a sig:Signature;
+		?base_node_signature a sig:Signature;
 			sig:level siglevels:0;
-			sig:id ?new_signature_id.
-		?i sig:hasSignature ?new_signature
+			sig:id ?base_node_signature_id.
+		?i sig:hasSignature ?base_node_signature
 	}
 }
 WHERE {
-
 	{
 		SELECT
-			?i
-  			?i_type_sig
-			(
-				GROUP_CONCAT(
-					CONCAT(
-						?p_o_type_sig,
-						' (',
-						IF(?p_o_type_sig_count > 5, 'n', STR(?p_o_type_sig_count)),
-						')'
-					);
-					separator=";"
-			) AS ?dt_signature)
+			?i ?i_type_signature
+			(GROUP_CONCAT(?datatype_property_signature_id) AS ?dt_signature)
 		WHERE {
 			SELECT
-				?i ?i_type_sig ?p_o_type_sig
-				(COUNT(DISTINCT ?o) AS ?p_o_type_sig_count)
+				?i ?i_type_signature
+				?datatype_property_signature ?datatype_property_signature_id
 			WHERE {
-				SELECT
-					?i ?i_type_sig ?o
-					(CONCAT(?p_sig, ?o_signature_id) AS ?p_o_type_sig)
-				WHERE {
-					{
-						SELECT
-							?i ?i_type_sig ?o
-							(GROUP_CONCAT(CONCAT('<',STR(?p),'>'); separator="|") AS ?p_sig)
-						WHERE {
-							SELECT ?i ?i_type_sig ?o ?p
-							WHERE {
-								{
-									SELECT
-										?i
-										(CONCAT('a ', GROUP_CONCAT(CONCAT('<',STR(?i_type),'>'); separator=",")) AS ?i_type_sig)
-									WHERE {
-										SELECT DISTINCT ?i ?i_type
-										WHERE {
-											{
-												?i ?p_out ?o
-											} UNION {
-												?s ?p_in ?i
-												FILTER(isIRI(?i) || isBLANK(?i))
-											}
-											OPTIONAL {
-												?i a ?i_type
-											}
-											# FILTER NOT EXISTS {
-											# 	?i rdf:type/rdfs:subClassOf+ ?i_type
-											# }
-										}
-										ORDER BY ?i ?i_type
-									}
-									GROUP BY ?i
-								}
-								OPTIONAL {
-									?i ?p ?o.
-									FILTER(?p != rdf:type && isLITERAL(?o)).
-								}
-								# FILTER NOT EXISTS {
-								# 	?i ?p_spec ?o.
-								# 	?p_spec rdfs:subPropertyOf+ ?p.
-								# }
-							}
-							ORDER BY ?i ?o ?p
-						}
-						GROUP BY ?i ?i_type_sig ?o
+				GRAPH sigdata:graph {
+					?i sig:hasTypeSignature ?i_type_signature.
+					OPTIONAL {
+						?i sig:hasDatatypePropertySignature ?datatype_property_signature.
+						?datatype_property_signature a sig:DatatypePropertySignature;
+							sig:level siglevels:0;
+							sig:id ?datatype_property_signature_id.
 					}
-					BIND(DATATYPE(?o) AS ?o_type)
-					BIND(LANG(?o) AS ?o_lang)
-					BIND(CONCAT(' ^^<', STR(?o_type), '>', IF(?o_lang, CONCAT(' @', STR(?o_lang)), '')) AS ?o_signature_id)
-					# FILTER NOT EXISTS {
-					# 	?o rdf:type/rdfs:subClassOf+ ?o_type
-					# }
 				}
 			}
-			GROUP BY
-				?i ?i_type_sig ?p_o_type_sig
-			ORDER BY ?i ?p_o_type_sig
+			ORDER BY
+				?i ?datatype_property_signature_id
 		}
 		GROUP BY
-			?i ?i_type_sig
+			?i ?i_type_signature
 	}
 
   	BIND(
-		IF(BOUND(?i_type_sig),
-			IF(BOUND(?dt_signature),
-				CONCAT(?i_type_sig, ';', ?dt_signature),
-				?i_type_sig),
-			IF(BOUND(?dt_signature),
-				?dt_signature,
-				'')) AS ?new_signature_id)
+		SHA1(IF(BOUND(?dt_signature),
+				CONCAT(?i_type_signature, ';', ?dt_signature),
+				?i_type_signature))
+		AS ?base_node_signature_id
+	)
 
 	# The level is part of the signature IRI: the same id string can occur at
 	# several levels (e.g. a resource without object links keeps its level-0 id
 	# at every level), and a shared node would end up with several sig:level
 	# values, making other resources appear to have several signatures per level.
-	BIND(IRI(CONCAT(STR(sigs:), '0/', ENCODE_FOR_URI(STR(?new_signature_id)))) AS ?new_signature)
+	BIND(IRI(CONCAT(STR(sigs:), '0/', ENCODE_FOR_URI(STR(?base_node_signature_id)))) AS ?base_node_signature)
 
 };
 
