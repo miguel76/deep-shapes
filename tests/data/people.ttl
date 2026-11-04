@@ -1,0 +1,20 @@
+# Small hand-written graph used for the snapshot test of exact signature ids
+# (tests/expected/people-signatures.tsv) and as a regression test for
+# duplicate signatures: ex:bob and ex:carol share their level-0 signature,
+# but only ex:carol has an object link, so ex:bob keeps its level-0 id at
+# higher levels. Before signature IRIs included the level, this made
+# ex:carol appear to have two level-1 signatures.
+@prefix ex: <http://ex.org/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+ex:alice a ex:Person ;
+	ex:name "Alice" ; rdfs:label "Alice" ;
+	ex:nick "Al"@en, "Ali"@en ;
+	ex:livesIn ex:rome ;
+	ex:knows ex:bob .
+ex:bob a ex:Person ;
+	ex:name "Bob" .
+ex:carol a ex:Person ;
+	ex:name "Carol" ;
+	ex:livesIn ex:rome .
+ex:rome a ex:City .

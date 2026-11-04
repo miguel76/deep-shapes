@@ -1,0 +1,65 @@
+BASE <https://w3id.org/hacid/data/>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
+PREFIX sig: <https://w3id.org/sig/>
+PREFIX sigdata: <sig/>
+PREFIX siglevels: <sig/levels/>
+PREFIX sigs: <sig/signatures/>
+
+# Number of distinct signatures per level, compared with the previous level.
+# Each level refines the previous one, so ?new_signatures is never negative.
+# ?converged is true at level n when level n has no more signatures than
+# level n-1. The partition was then already final at level n-1: every later
+# level groups resources the same way, so there is no need to compute more
+# levels. Compare counts, not ids: on cyclic data the ids keep changing after
+# convergence.
+#
+# ?final is true for a level marked `sig:final true` by
+# updates/signatures-finalize.ru (run by scripts/sig-converge.sh), which
+# removes the redundant converged level and marks the one below it.
+
+SELECT
+	?level_value
+	?signatures
+	?previous_signatures
+	?new_signatures
+	?converged
+	?final
+WHERE {
+	{
+		SELECT ?level_value (COUNT(DISTINCT ?sig) AS ?signatures)
+		WHERE {
+			GRAPH sigdata:graph {
+				?level sig:levelValue ?level_value.
+				?sig sig:level ?level.
+			}
+		}
+		GROUP BY ?level_value
+	}
+	OPTIONAL {
+		{
+			SELECT
+				?previous_level_value
+				(COUNT(DISTINCT ?previous_sig) AS ?previous_signatures)
+			WHERE {
+				GRAPH sigdata:graph {
+					?previous_level sig:levelValue ?previous_level_value.
+					?previous_sig sig:level ?previous_level.
+				}
+			}
+			GROUP BY ?previous_level_value
+		}
+		FILTER(?previous_level_value = ?level_value - 1)
+	}
+	BIND(?signatures - ?previous_signatures AS ?new_signatures)
+	BIND(?new_signatures = 0 AS ?converged)
+	OPTIONAL {
+		GRAPH sigdata:graph {
+			?level sig:levelValue ?level_value;
+				sig:final ?final_flag.
+		}
+	}
+	BIND(COALESCE(?final_flag, false) AS ?final)
+}
+ORDER BY ?level_value

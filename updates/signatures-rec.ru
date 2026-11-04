@@ -43,7 +43,18 @@ WHERE {
 				SELECT
 					?last_signature_level_value
 					?i ?i_signature_0_id ?o
-					(CONCAT(?p_sig, ' [', ?o_signature_id, ']') AS ?p_o_type_sig)
+					# Targets are referenced by their full previous-level id only when that
+					# level is 0 (short, readable ids). From level 2 on, the target's id is
+					# replaced by '#' + SHA1(id), so ids stay bounded in length instead of
+					# nesting all previous levels.
+					(CONCAT(
+						?p_sig,
+						' [',
+						IF(?last_signature_level_value < 1,
+							?o_signature_id,
+							CONCAT('#', SHA1(?o_signature_id))),
+						']'
+					) AS ?p_o_type_sig)
 				WHERE {
 					{
 						SELECT

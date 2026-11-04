@@ -1,0 +1,30 @@
+BASE <https://w3id.org/hacid/data/>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
+PREFIX sig: <https://w3id.org/sig/>
+PREFIX sigdata: <sig/>
+PREFIX siglevels: <sig/levels/>
+PREFIX sigs: <sig/signatures/>
+
+# Refinement violations (expected: none): two resources with the same
+# signature at level n+1 but different signatures at level n.
+
+SELECT ?level_value ?x ?y
+WHERE {
+	GRAPH sigdata:graph {
+		?next_level sig:levelValue ?next_level_value.
+		?next_sig sig:level ?next_level.
+		?x sig:hasSignature ?next_sig.
+		?y sig:hasSignature ?next_sig.
+		FILTER(STR(?x) < STR(?y))
+		?level sig:levelValue ?level_value.
+		FILTER(?level_value = ?next_level_value - 1)
+		?x_sig sig:level ?level.
+		?y_sig sig:level ?level.
+		?x sig:hasSignature ?x_sig.
+		?y sig:hasSignature ?y_sig.
+		FILTER(?x_sig != ?y_sig)
+	}
+}
+ORDER BY ?level_value ?x ?y

@@ -1,0 +1,22 @@
+BASE <https://w3id.org/hacid/data/>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
+PREFIX sig: <https://w3id.org/sig/>
+PREFIX sigdata: <sig/>
+PREFIX siglevels: <sig/levels/>
+PREFIX sigs: <sig/signatures/>
+
+# Resources with more than one signature at some level (expected: none).
+
+SELECT ?level_value ?i (COUNT(DISTINCT ?sig) AS ?signatures)
+WHERE {
+	GRAPH sigdata:graph {
+		?i sig:hasSignature ?sig.
+		?sig sig:level ?level.
+		?level sig:levelValue ?level_value.
+	}
+}
+GROUP BY ?level_value ?i
+HAVING (COUNT(DISTINCT ?sig) > 1)
+ORDER BY ?level_value ?i
