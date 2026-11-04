@@ -39,11 +39,12 @@ What exists today:
 | --- | --- |
 | `updates/signatures-base.ru` | SPARQL update: drops the signature graph and computes level-0 signatures. |
 | `updates/signatures-rec.ru` | SPARQL update: computes signatures for the level after the highest existing one. Run it repeatedly to go deeper. |
+| `updates/signatures-finalize.ru` | SPARQL update: after convergence, removes the redundant highest level and marks the one below it as final. |
 | `queries/signatures.rq` | Number of distinct signatures and of signed resources per level. |
-| `queries/convergence.rq` | Signature count per level compared with the previous level; tells when more levels stop being useful. |
+| `queries/convergence.rq` | Signature count per level compared with the previous level; tells when more levels stop being useful, and which level is marked final. |
 | `queries/duplicate-shapes.rq` | Sanity check: resources with more than one level-1 signature (expected: none). |
 | `queries/without-signature.rq` | Triples whose subject has no signature. |
-| `scripts/sig-converge.sh` | Computes levels one after another until the partition converges (optionally starting from level 0). |
+| `scripts/sig-converge.sh` | Computes levels one after another until the partition converges, then removes the redundant last level. |
 | `scripts/*.sh` | Wrappers around the Apache Jena command-line tools (see below). |
 | `kg/config/kg-config.ttl` | TDB2 dataset + Fuseki service configuration. |
 | `docs/signatures.md` | Detailed description of the signature format and data model. |
@@ -83,14 +84,20 @@ Run every script from the repository root.
    Alternatively, let the loop script do steps 3 and 4, stopping at
    convergence:
    ```sh
-   scripts/sig-converge.sh --base                 # from level 0 to convergence
-   scripts/sig-converge.sh                        # continue from the last level
-   scripts/sig-converge.sh --base --max-levels 5  # at most 5 levels after level 0
+   scripts/sig-converge.sh                         # continue (or start) until convergence
+   scripts/sig-converge.sh --max-levels 5          # at most 5 new levels in this run
+   scripts/sig-converge.sh --restart               # discard all signatures, start from level 0
    ```
-   It exits with status 0 when converged and 2 when `--max-levels` was reached
-   first. The last level it computes is the one that confirms convergence, so
-   it duplicates the previous level's partition. `TDB_ARGS` overrides the
-   dataset options (default `--tdb=kg/config/kg-config.ttl`).
+   - It computes level 0 first if there are no signatures yet, and otherwise
+     continues from the highest existing level.
+   - Convergence is only visible once a level adds no signatures. That level
+     just repeats the previous one's partition, so the script removes it
+     (`updates/signatures-finalize.ru`) and marks the previous level with
+     `sig:final true`. Later runs see the mark and stop immediately.
+   - It exits with status 0 when converged and 2 when `--max-levels` was
+     reached first.
+   - `TDB_ARGS` overrides the dataset options (default
+     `--tdb=kg/config/kg-config.ttl`).
 5. Inspect the results:
    ```sh
    scripts/check.sh

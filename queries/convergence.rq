@@ -14,6 +14,10 @@ PREFIX sigs: <sig/signatures/>
 # level groups resources the same way, so there is no need to compute more
 # levels. Compare counts, not ids: on cyclic data the ids keep changing after
 # convergence.
+#
+# ?final is true for a level marked `sig:final true` by
+# updates/signatures-finalize.ru (run by scripts/sig-converge.sh), which
+# removes the redundant converged level and marks the one below it.
 
 SELECT
 	?level_value
@@ -21,6 +25,7 @@ SELECT
 	?previous_signatures
 	?new_signatures
 	?converged
+	?final
 WHERE {
 	{
 		SELECT ?level_value (COUNT(DISTINCT ?sig) AS ?signatures)
@@ -49,5 +54,12 @@ WHERE {
 	}
 	BIND(?signatures - ?previous_signatures AS ?new_signatures)
 	BIND(?new_signatures = 0 AS ?converged)
+	OPTIONAL {
+		GRAPH sigdata:graph {
+			?level sig:levelValue ?level_value;
+				sig:final ?final_flag.
+		}
+	}
+	BIND(COALESCE(?final_flag, false) AS ?final)
 }
 ORDER BY ?level_value

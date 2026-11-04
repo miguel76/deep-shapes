@@ -3,13 +3,19 @@
 # Compute signature levels until the partition converges, i.e. until a level
 # adds no new signatures (see queries/convergence.rq). Run from the repo root.
 #
-# Usage: scripts/sig-converge.sh [--base] [--max-levels N]
+# Usage: scripts/sig-converge.sh [--restart] [--max-levels N]
 #
-#   --base          recompute level 0 first (drops all existing signatures)
-#   --max-levels N  compute at most N new levels in this run, even if the
-#                   partition hasn't converged yet (default: no limit;
-#                   convergence is always reached eventually, but each level
-#                   costs a full pass over the KG)
+# Starts from level 0 if there are no signatures yet; otherwise continues from
+# the highest existing level. On convergence, the level that confirmed it is
+# removed (it only repeats the previous partition) and the level below is
+# marked final, so later runs do nothing.
+#
+#   --restart       discard all existing signatures and start again from
+#                   level 0
+#   --max-levels N  compute at most N new levels in this run (not counting
+#                   level 0), even if the partition hasn't converged yet
+#                   (default: no limit; convergence is always reached
+#                   eventually, but each level costs a full pass over the KG)
 #
 # Exit status: 0 when converged, 2 when --max-levels was reached first,
 # 1 on errors.
@@ -24,15 +30,15 @@ set -euo pipefail
 export JVM_ARGS=${JVM_ARGS:--Xmx16G}
 TDB_ARGS=${TDB_ARGS:---tdb=kg/config/kg-config.ttl}
 
-run_base=false
+restart=false
 max_levels=
 while [ $# -gt 0 ]; do
 	case "$1" in
-		--base) run_base=true; shift ;;
+		--restart) restart=true; shift ;;
 		--max-levels)
 			[ $# -ge 2 ] || { echo "--max-levels needs a value" >&2; exit 1; }
 			max_levels=$2; shift 2 ;;
-		-h|--help) sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+		-h|--help) sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
 		*) echo "Unknown option: $1" >&2; exit 1 ;;
 	esac
 done
@@ -41,36 +47,47 @@ if [ -n "$max_levels" ] && ! [[ "$max_levels" =~ ^[0-9]+$ ]]; then
 	exit 1
 fi
 
-# Prints "level signatures new_signatures converged" for the highest level,
-# or nothing if there are no signatures yet.
+update() {
+	# shellcheck disable=SC2086
+	tdb2.tdbupdate $TDB_ARGS --update "$1"
+}
+
+# Prints "level signatures new_signatures converged final" for the highest
+# level, or nothing if there are no signatures yet.
 last_level_status() {
 	# shellcheck disable=SC2086
 	tdb2.tdbquery $TDB_ARGS --results=csv --query queries/convergence.rq \
 		| tr -d '\r' \
 		| tail -n +2 \
 		| tail -n 1 \
-		| awk -F, '{ print $1, $2, ($4 == "" ? "-" : $4), ($5 == "" ? "false" : $5) }'
+		| awk -F, '{ print $1, $2, ($4 == "" ? "-" : $4), ($5 == "" ? "false" : $5), $6 }'
 }
 
-if $run_base; then
+if $restart || [ -z "$(last_level_status)" ]; then
 	echo "Computing level 0..."
-	# shellcheck disable=SC2086
-	tdb2.tdbupdate $TDB_ARGS --update updates/signatures-base.ru
+	update updates/signatures-base.ru
 fi
 
 computed=0
 while true; do
 	status=$(last_level_status)
 	if [ -z "$status" ]; then
-		echo "No signatures found: run with --base (or scripts/sig-base.sh) first." >&2
+		echo "No signatures after computing level 0: is the dataset empty?" >&2
 		exit 1
 	fi
-	read -r level signatures new_signatures converged <<< "$status"
+	read -r level signatures new_signatures converged final <<< "$status"
+
+	if [ "$final" = "true" ]; then
+		echo "Already converged: level $level ($signatures signatures) is final."
+		exit 0
+	fi
 	echo "Level $level: $signatures signatures ($new_signatures new)"
 
 	if [ "$converged" = "true" ]; then
-		echo "Converged: the partition is final from level $((level - 1)) on" \
-			"(level $level adds no signatures)."
+		echo "Level $level adds no signatures: removing it and marking level" \
+			"$((level - 1)) as final..."
+		update updates/signatures-finalize.ru
+		echo "Converged: level $((level - 1)) is final."
 		exit 0
 	fi
 	if [ -n "$max_levels" ] && [ "$computed" -ge "$max_levels" ]; then
@@ -79,7 +96,6 @@ while true; do
 	fi
 
 	echo "Computing level $((level + 1))..."
-	# shellcheck disable=SC2086
-	tdb2.tdbupdate $TDB_ARGS --update updates/signatures-rec.ru
+	update updates/signatures-rec.ru
 	computed=$((computed + 1))
 done

@@ -138,6 +138,13 @@ Everything is written to the named graph
 ex:alice sig:hasSignature <sig/signatures/1/...> .
 ```
 
+Once the levels have converged, `scripts/sig-converge.sh` (via
+`updates/signatures-finalize.ru`) marks the last level kept:
+
+```turtle
+<sig/levels/8> sig:final true .
+```
+
 The level is part of the signature IRI (`sig/signatures/{level}/...`). This is
 required: the same id string can occur at several levels (see above), and a
 signature node shared across levels would have several `sig:level` values,
@@ -205,6 +212,12 @@ signature **counts** between levels, not ids: `queries/convergence.rq` does
 this, reporting `converged = true` at the first level that adds no
 signatures. Since targets are referenced by
 hash from level 2 on, id length stays bounded either way.
+
+That first level that adds nothing is redundant: it repeats the previous
+level's partition under new names. `scripts/sig-converge.sh` computes levels
+until it appears, then removes it and marks the previous level with
+`sig:final true` (`final = true` in `queries/convergence.rq`), so the
+highest level kept is the converged one, and later runs don't recompute it.
 
 ### Empirical check
 

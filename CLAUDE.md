@@ -14,6 +14,8 @@ exact signature format and data model before changing the updates.
 
 - `updates/signatures-base.ru`: level-0 signatures (drops the signature graph first).
 - `updates/signatures-rec.ru`: next level after the highest existing one.
+- `updates/signatures-finalize.ru`: on convergence, removes the redundant
+  highest level and marks the one below `sig:final true`.
 - `queries/*.rq`: inspection and sanity-check queries.
 - `scripts/*.sh`: Jena CLI wrappers; run them from the repo root.
 - `kg/config/kg-config.ttl`: TDB2 + Fuseki config (`unionDefaultGraph true`).
