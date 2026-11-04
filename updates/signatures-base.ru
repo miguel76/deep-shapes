@@ -62,7 +62,7 @@ WHERE {
 												?i ?p_out ?o
 											} UNION {
 												?s ?p_in ?i
-												FILTER(isIRI(?i))
+												FILTER(isIRI(?i) || isBLANK(?i))
 											}
 											OPTIONAL {
 												?i a ?i_type
