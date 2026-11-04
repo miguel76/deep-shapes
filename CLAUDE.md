@@ -18,18 +18,32 @@ exact signature format and data model before changing the updates.
   highest level and marks the one below `sig:final true`.
 - `queries/*.rq`: inspection and sanity-check queries.
 - `scripts/*.sh`: Jena CLI wrappers; run them from the repo root.
+- `tests/`: end-to-end tests (`test_signatures.py`), the synthetic graph
+  generator (`generate.py`), test-only queries, fixtures and snapshots.
 - `kg/config/kg-config.ttl`: TDB2 + Fuseki config (`unionDefaultGraph true`).
 - `input/` and `kg/tdb2/`: git-ignored data (the user's KG and its TDB2 store).
   Never commit data from them.
 
 ## Running things
 
-There is no build and no test suite. The user runs the pipeline on a large KG
-with the scripts (`load.sh`, `sig-base.sh`, `sig-rec.sh` repeated or
-`sig-converge.sh`, `check.sh`). That KG is not in the repo.
+There is no build. The user runs the pipeline on a large KG with the scripts
+(`load.sh`, `sig-base.sh`, `sig-rec.sh` repeated or `sig-converge.sh`,
+`check.sh`). That KG is not in the repo.
 
-To check a change, use a small hand-written graph in a scratch directory, not
-the repo:
+Run the test suite after any change to the updates, queries or scripts:
+
+```sh
+JENA_HOME=/path/to/apache-jena-5.x python3 -m unittest discover -s tests -v
+```
+
+It takes a few minutes (run it in the background). Get Jena from
+archive.apache.org/dist/jena/binaries/ if it isn't installed. If a change to
+the id format is intended, regenerate the snapshot with `UPDATE_SNAPSHOTS=1`
+and check the diff of `tests/expected/`. New test graphs belong in
+`tests/generate.py`. For structured ones, also generate the SHACL shapes the
+data follows and the expected results, as `layered` does.
+
+To experiment by hand, use a small graph in a scratch directory, not the repo:
 
 ```sh
 J=/path/to/apache-jena-5.x/bin   # download from archive.apache.org/dist/jena/binaries/ if needed
@@ -47,8 +61,9 @@ Jena `bin` directory on the `PATH` and
 Use `--loc` + `--set` rather than `--tdb=kg/config/kg-config.ttl`: Jena 5.2's
 `tdb2.*` tools reject that config file's dataset type.
 
-Sample data must be quads (N-Quads or TriG) in a named graph, since the
-dataset relies on the union default graph.
+Sample data must go in a named graph, since the dataset relies on the union
+default graph: use quads (N-Quads or TriG), or load triples with
+`tdb2.tdbloader --graph=<iri>`.
 
 ## Invariants to preserve
 

@@ -48,8 +48,9 @@ What exists today:
 | `scripts/*.sh` | Wrappers around the Apache Jena command-line tools (see below). |
 | `kg/config/kg-config.ttl` | TDB2 dataset + Fuseki service configuration. |
 | `docs/signatures.md` | Detailed description of the signature format and data model. |
+| `tests/` | End-to-end tests and the synthetic graph generator (see [Tests](#tests)). |
 
-Not there yet: shape generation, automated tests, sample data.
+Not there yet: shape generation.
 
 ## Requirements
 
@@ -115,6 +116,56 @@ graphs, including the signature graph.
 
 See [`docs/signatures.md`](docs/signatures.md) for the signature format, the
 RDF vocabulary used, and known limitations.
+
+## Tests
+
+The tests run the real updates and scripts with Jena on small graphs, each in
+a temporary TDB2 store. They need Python 3 (standard library only) and the
+Jena tools on the `PATH`, or `JENA_HOME` pointing to a Jena distribution;
+without Jena they are skipped. From the repository root:
+
+```sh
+python3 -m unittest discover -s tests -v
+```
+
+They take a few minutes, mostly JVM start-up for each Jena call. What they
+check:
+
+- on every graph: one signature per resource and level, each level refining
+  the previous one, signature counts increasing up to a final level marked
+  `sig:final`, and a rerun of `sig-converge.sh` doing nothing;
+- on structured graphs with a known answer: the exact signature count at
+  each level and the final level, and that resources share a final signature
+  exactly when they follow the same SHACL shape;
+- `--max-levels` and resuming, and `--restart`;
+- the exact ids for levels 0–2 on a small hand-written graph
+  (`tests/data/people.ttl`) against a snapshot in `tests/expected/`. If the
+  id format changes on purpose, regenerate it with `UPDATE_SNAPSHOTS=1` and
+  review the diff.
+
+### Synthetic graphs
+
+`tests/generate.py` writes the test graphs, and can be used on its own to
+produce larger ones:
+
+```sh
+python3 tests/generate.py layered --families 3 --depth 6 --fanout 2 --copies 100 --out /tmp/layered
+python3 tests/generate.py random --nodes 10000 --max-degree 9 --seed 1 --out /tmp/random
+```
+
+- **`layered`**: for each family, `--copies` complete trees of depth `--depth`
+  and fan-out `--fanout`. Leaves differ by family, and internal nodes look
+  alike until their leaves are within reach, so `--depth` sets how many
+  levels are needed to tell all nodes apart. Besides `data.nt`, it writes
+  `shapes.ttl`, the SHACL shapes the data follows (one per family and node
+  height, the shapes a complete discovery pipeline should find), and
+  `expected.json`, with the expected signature counts per level, the final
+  level, and the nodes of each shape.
+- **`random`**: an unstructured graph with cycles and link counts above the
+  cap of 5. Only the general properties can be checked on it.
+
+Load `data.nt` into a named graph, e.g.
+`tdb2.tdbloader --loc=… --graph=http://example.org/synthetic/graph data.nt`.
 
 ## License
 

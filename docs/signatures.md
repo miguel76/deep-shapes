@@ -221,9 +221,19 @@ highest level kept is the converged one, and later runs don't recompute it.
 
 ### Empirical check
 
-Both properties were checked with Jena 5.2 on two synthetic graphs, using a
-query that looks for two resources with the same level-(n+1) signature but
-different level-n signatures (none were found at any level):
+Both properties are checked by the test suite (`tests/`, see the README),
+with `tests/queries/refinement.rq`, which looks for two resources with the
+same level-(n+1) signature but different level-n signatures. On the
+`layered` graphs of `tests/generate.py` the exact counts are known: with F
+families of trees of depth D, level n has
+
+```
+1 (classes, empty id) + F (leaves) + F·min(n, D) + (1 if n < D else 0)
+```
+
+signatures, so the partition is final at level D (level D − 1 when F = 1).
+
+Before the test suite, the properties were checked by hand on two graphs:
 
 - an 80-node random graph with out-degrees up to 9 (so the cap is exercised):
   6 signatures at level 0, then 78 from level 1 through level 10. The longest

@@ -1,0 +1,18 @@
+http://ex.org/City	0	
+http://ex.org/City	1	
+http://ex.org/City	2	
+http://ex.org/Person	0	
+http://ex.org/Person	1	
+http://ex.org/Person	2	
+http://ex.org/alice	0	a <http://ex.org/Person>;<http://ex.org/name>|<http://www.w3.org/2000/01/rdf-schema#label> ^^<http://www.w3.org/2001/XMLSchema#string> (1);<http://ex.org/nick> ^^<http://www.w3.org/1999/02/22-rdf-syntax-ns#langString> @en (2)
+http://ex.org/alice	1	a <http://ex.org/Person>;<http://ex.org/name>|<http://www.w3.org/2000/01/rdf-schema#label> ^^<http://www.w3.org/2001/XMLSchema#string> (1);<http://ex.org/nick> ^^<http://www.w3.org/1999/02/22-rdf-syntax-ns#langString> @en (2); <http://ex.org/knows> [a <http://ex.org/Person>;<http://ex.org/name> ^^<http://www.w3.org/2001/XMLSchema#string> (1)] (1);<http://ex.org/livesIn> [a <http://ex.org/City>] (1)
+http://ex.org/alice	2	a <http://ex.org/Person>;<http://ex.org/name>|<http://www.w3.org/2000/01/rdf-schema#label> ^^<http://www.w3.org/2001/XMLSchema#string> (1);<http://ex.org/nick> ^^<http://www.w3.org/1999/02/22-rdf-syntax-ns#langString> @en (2); <http://ex.org/knows> [#1c3e63c840f97fefec28689493b24e02ffe7ac3d] (1);<http://ex.org/livesIn> [#16250d1c5c8c813ff0481e66908d9cada20d4686] (1)
+http://ex.org/bob	0	a <http://ex.org/Person>;<http://ex.org/name> ^^<http://www.w3.org/2001/XMLSchema#string> (1)
+http://ex.org/bob	1	a <http://ex.org/Person>;<http://ex.org/name> ^^<http://www.w3.org/2001/XMLSchema#string> (1)
+http://ex.org/bob	2	a <http://ex.org/Person>;<http://ex.org/name> ^^<http://www.w3.org/2001/XMLSchema#string> (1)
+http://ex.org/carol	0	a <http://ex.org/Person>;<http://ex.org/name> ^^<http://www.w3.org/2001/XMLSchema#string> (1)
+http://ex.org/carol	1	a <http://ex.org/Person>;<http://ex.org/name> ^^<http://www.w3.org/2001/XMLSchema#string> (1); <http://ex.org/livesIn> [a <http://ex.org/City>] (1)
+http://ex.org/carol	2	a <http://ex.org/Person>;<http://ex.org/name> ^^<http://www.w3.org/2001/XMLSchema#string> (1); <http://ex.org/livesIn> [#16250d1c5c8c813ff0481e66908d9cada20d4686] (1)
+http://ex.org/rome	0	a <http://ex.org/City>
+http://ex.org/rome	1	a <http://ex.org/City>
+http://ex.org/rome	2	a <http://ex.org/City>

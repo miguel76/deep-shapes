@@ -1,0 +1,21 @@
+BASE <https://w3id.org/hacid/data/>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
+PREFIX sig: <https://w3id.org/sig/>
+PREFIX sigdata: <sig/>
+PREFIX siglevels: <sig/levels/>
+PREFIX sigs: <sig/signatures/>
+
+# Every signature of every resource, for snapshots: resource, level, id.
+
+SELECT ?i ?level_value ?id
+WHERE {
+	GRAPH sigdata:graph {
+		?i sig:hasSignature ?sig.
+		?sig sig:level ?level;
+			sig:id ?id.
+		?level sig:levelValue ?level_value.
+	}
+}
+ORDER BY ?i ?level_value
