@@ -40,6 +40,7 @@ What exists today:
 | `updates/signatures-base.ru` | SPARQL update: drops the signature graph and computes level-0 signatures. |
 | `updates/signatures-rec.ru` | SPARQL update: computes signatures for the level after the highest existing one. Run it repeatedly to go deeper. |
 | `queries/signatures.rq` | Number of distinct signatures and of signed resources per level. |
+| `queries/convergence.rq` | Signature count per level compared with the previous level; tells when more levels stop being useful. |
 | `queries/duplicate-shapes.rq` | Sanity check: resources with more than one level-1 signature (expected: none). |
 | `queries/without-signature.rq` | Triples whose subject has no signature. |
 | `scripts/*.sh` | Wrappers around the Apache Jena command-line tools (see below). |
@@ -75,6 +76,8 @@ Run every script from the repository root.
    scripts/sig-rec.sh   # level 1
    scripts/sig-rec.sh   # level 2, ...
    ```
+   Once `queries/convergence.rq` reports `converged = true` for the last
+   level, more levels won't separate any more resources.
 5. Inspect the results:
    ```sh
    scripts/check.sh

@@ -201,7 +201,9 @@ Partitions converge, but ids need not. On acyclic data the ids eventually stop
 changing. With cycles, a resource's id references its targets' previous-level
 ids, which keep changing, so the ids change at every level even after the
 partition is stable: they are just renamed. Detect convergence by comparing
-signature **counts** between levels, not ids. Since targets are referenced by
+signature **counts** between levels, not ids: `queries/convergence.rq` does
+this, reporting `converged = true` at the first level that adds no
+signatures. Since targets are referenced by
 hash from level 2 on, id length stays bounded either way.
 
 ### Empirical check
