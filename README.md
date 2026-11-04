@@ -1,5 +1,7 @@
 # deep-shapes
 
+[![Tests](https://github.com/miguel76/deep-shapes/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/miguel76/deep-shapes/actions/workflows/tests.yml?query=branch%3Amain)
+
 Beyond simple class shapes: complex SHACL shapes discovery.
 
 ## Aim
