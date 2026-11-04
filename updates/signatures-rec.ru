@@ -7,132 +7,231 @@ PREFIX sigdata: <sig/>
 PREFIX siglevels: <sig/levels/>
 PREFIX sigs: <sig/signatures/>
 
+# Computes the level after the highest existing one. The first operation adds
+# the new level; every following operation works on the highest level (the
+# new one, ?level) and reads the targets' signatures at the level below it
+# (?previous_level).
+
 INSERT {
 	GRAPH sigdata:graph {
-		?next_signature_level a sig:SignatureLevel;
-			sig:levelValue ?next_signature_level_value.
+		?next_level a sig:SignatureLevel;
+			sig:levelValue ?next_level_value.
+	}
+}
+WHERE {
+	{
+		SELECT (MAX(?level_value) AS ?last_level_value)
+		WHERE {
+			GRAPH sigdata:graph {
+				?level a sig:SignatureLevel;
+					sig:levelValue ?level_value.
+			}
+		}
+	}
+	BIND(?last_level_value + 1 AS ?next_level_value)
+	BIND(IRI(CONCAT(STR(siglevels:), STR(?next_level_value))) AS ?next_level)
+};
+
+INSERT {
+	GRAPH sigdata:graph {
+		?object_path_signature a sig:ObjectPathSignature;
+			sig:level ?level;
+			sig:id ?object_path_signature_id;
+			sig:hasTargetSignature ?o_signature;
+			sig:hasSourceTargetPair [
+				sig:source ?i;
+				sig:target ?o
+			].
+	}
+}
+WHERE {
+	{
+		SELECT
+			?level_value ?level ?i ?o ?o_signature ?o_signature_id
+			(GROUP_CONCAT(CONCAT('<',STR(?p),'>'); separator="|") AS ?link_signature_str)
+		WHERE {
+			SELECT ?level_value ?level ?i ?o ?o_signature ?o_signature_id ?p
+			WHERE {
+				{
+					SELECT (MAX(?any_level_value) AS ?level_value)
+					WHERE {
+						GRAPH sigdata:graph {
+							?any_level a sig:SignatureLevel;
+								sig:levelValue ?any_level_value.
+						}
+					}
+				}
+				GRAPH sigdata:graph {
+					?level sig:levelValue ?level_value.
+					?previous_level sig:levelValue ?previous_level_value.
+				}
+				FILTER(?previous_level_value = ?level_value - 1)
+				GRAPH ?g { ?i ?p ?o }
+				FILTER(?g != sigdata:graph && ?p != rdf:type)
+				GRAPH sigdata:graph {
+					?o sig:hasSignature ?o_signature.
+					?o_signature a sig:Signature;
+						sig:level ?previous_level;
+						sig:id ?o_signature_id.
+				}
+				# FILTER NOT EXISTS {
+				# 	?i ?p_spec ?o.
+				# 	?p_spec rdfs:subPropertyOf+ ?p.
+				# }
+			}
+			ORDER BY ?i ?o ?p
+		}
+		GROUP BY ?level_value ?level ?i ?o ?o_signature ?o_signature_id
+	}
+	# Target signature ids are SHA-1 hashes, so ids don't grow with the level.
+	BIND(SHA1(CONCAT(?link_signature_str, ' [', ?o_signature_id, ']')) AS ?object_path_signature_id)
+	BIND(IRI(CONCAT(STR(sigs:), 'object-values/', STR(?level_value), '/', ENCODE_FOR_URI(?object_path_signature_id))) AS ?object_path_signature)
+};
+
+INSERT {
+	GRAPH sigdata:graph {
+		?object_path_signature sig:hasMemberProperty ?p.
+	}
+}
+WHERE {
+	{
+		SELECT ?object_path_signature (SAMPLE(?st) AS ?source_target)
+		WHERE {
+			{
+				SELECT (MAX(?any_level_value) AS ?level_value)
+				WHERE {
+					GRAPH sigdata:graph {
+						?any_level a sig:SignatureLevel;
+							sig:levelValue ?any_level_value.
+					}
+				}
+			}
+			GRAPH sigdata:graph {
+				?level sig:levelValue ?level_value.
+				?object_path_signature a sig:ObjectPathSignature;
+					sig:level ?level;
+					sig:hasSourceTargetPair ?st.
+			}
+		}
+		GROUP BY ?object_path_signature
+	}
+	GRAPH sigdata:graph {
+		?source_target
+			sig:source ?source;
+			sig:target ?target.
+	}
+	GRAPH ?g { ?source ?p ?target }
+	FILTER(?g != sigdata:graph && ?p != rdf:type).
+	# FILTER NOT EXISTS {
+	# 	?i ?p_spec ?o.
+	# 	?p_spec rdfs:subPropertyOf+ ?p.
+	# }
+};
+
+INSERT {
+	GRAPH sigdata:graph {
+		?object_property_signature a sig:ObjectPropertySignature;
+			sig:level ?level;
+			sig:id ?object_property_signature_id;
+			sig:hasObjectPathSignature ?object_path_signature;
+			sig:hasExactValueCount ?exact_object_value_count;
+			sig:hasMinValueCount ?min_object_value_count.
+		?i sig:hasObjectPropertySignature ?object_property_signature
+	}
+}
+WHERE {
+	{
+		SELECT
+			?level_value ?level
+			?i ?object_path_signature ?object_path_signature_id
+			(COUNT(DISTINCT ?o) AS ?object_value_count)
+		WHERE {
+			{
+				SELECT (MAX(?any_level_value) AS ?level_value)
+				WHERE {
+					GRAPH sigdata:graph {
+						?any_level a sig:SignatureLevel;
+							sig:levelValue ?any_level_value.
+					}
+				}
+			}
+			GRAPH sigdata:graph {
+				?level sig:levelValue ?level_value.
+				?object_path_signature a sig:ObjectPathSignature;
+					sig:level ?level;
+					sig:id ?object_path_signature_id;
+					sig:hasSourceTargetPair [
+						sig:source ?i;
+						sig:target ?o
+					].
+			}
+		}
+		GROUP BY
+			?level_value ?level
+			?i ?object_path_signature ?object_path_signature_id
+	}
+	VALUES ?count_limit {5}
+	VALUES ?undef {UNDEF}
+	BIND(IF(?object_value_count > ?count_limit, ?undef, ?object_value_count) AS ?exact_object_value_count)
+	BIND(IF(?object_value_count > ?count_limit, ?count_limit + 1, ?undef) AS ?min_object_value_count)
+	BIND(IF(?object_value_count > ?count_limit, 'n', STR(?object_value_count)) AS ?object_value_count_str)
+	BIND(SHA1(CONCAT(?object_path_signature_id, ?object_value_count_str)) AS ?object_property_signature_id)
+	BIND(IRI(CONCAT(STR(sigs:), 'object-properties/', STR(?level_value), '/', ENCODE_FOR_URI(?object_property_signature_id))) AS ?object_property_signature)
+};
+
+INSERT {
+	GRAPH sigdata:graph {
 		?new_signature a sig:Signature;
-			sig:level ?next_signature_level;
+			sig:level ?level;
 			sig:id ?new_signature_id.
 		?i sig:hasSignature ?new_signature
 	}
 }
 WHERE {
-
 	{
 		SELECT
-			?last_signature_level_value
-			?i ?i_signature_0_id
-			(
-				GROUP_CONCAT(
-					CONCAT(
-						?p_o_type_sig,
-						' (',
-						IF(?p_o_type_sig_count > 5, 'n', STR(?p_o_type_sig_count)),
-						')'
-					);
-					separator=";"
-				) AS ?p_o_signature
-			)
+			?level_value ?level ?i ?i_signature_0_id
+			(GROUP_CONCAT(?object_property_signature_id) AS ?obj_signature)
 		WHERE {
 			SELECT
-				?last_signature_level_value
-				?i ?i_signature_0_id ?p_o_type_sig
-				(COUNT(DISTINCT ?o) AS ?p_o_type_sig_count)
+				?level_value ?level ?i ?i_signature_0_id
+				?object_property_signature ?object_property_signature_id
 			WHERE {
-				SELECT
-					?last_signature_level_value
-					?i ?i_signature_0_id ?o
-					# Targets are referenced by their full previous-level id only when that
-					# level is 0 (short, readable ids). From level 2 on, the target's id is
-					# replaced by '#' + SHA1(id), so ids stay bounded in length instead of
-					# nesting all previous levels.
-					(CONCAT(
-						?p_sig,
-						' [',
-						IF(?last_signature_level_value < 1,
-							?o_signature_id,
-							CONCAT('#', SHA1(?o_signature_id))),
-						']'
-					) AS ?p_o_type_sig)
-				WHERE {
-					{
-						SELECT
-							?last_signature_level_value
-							?i ?i_signature_0_id
-							?o ?o_signature_id
-							(GROUP_CONCAT(CONCAT('<',STR(?p),'>'); separator="|") AS ?p_sig)
-						WHERE {
-							SELECT
-								?last_signature_level_value
-								?i ?i_signature_0_id
-								?o ?o_signature_id ?p
-							WHERE {
-								{	
-									SELECT (MAX(?signature_level_value) AS ?last_signature_level_value)
-									WHERE {
-										?signature_level a sig:SignatureLevel;
-											sig:levelValue ?signature_level_value.
-									}
-								}
-								?last_signature_level a sig:SignatureLevel;
-									sig:levelValue ?last_signature_level_value.
-								?i sig:hasSignature ?i_signature_0.
-								?i_signature_0
-									sig:level siglevels:0;
-									sig:id ?i_signature_0_id.
-								OPTIONAL {
-									?i ?p ?o.
-									FILTER(?p != rdf:type).
-									?o sig:hasSignature [
-										sig:level ?last_signature_level;
-										sig:id ?o_signature_id
-									].
-								}
-								# FILTER NOT EXISTS {
-								# 	?i ?p_spec ?o.
-								# 	?p_spec rdfs:subPropertyOf+ ?p.
-								# }
-							}
-							ORDER BY ?i ?o ?p
+				{
+					SELECT (MAX(?any_level_value) AS ?level_value)
+					WHERE {
+						GRAPH sigdata:graph {
+							?any_level a sig:SignatureLevel;
+								sig:levelValue ?any_level_value.
 						}
-						GROUP BY
-							?last_signature_level_value
-							?i ?i_signature_0_id
-							?o ?o_signature_id
 					}
-					# FILTER NOT EXISTS {
-					# 	?o rdf:type/rdfs:subClassOf+ ?o_type
-					# }
+				}
+				GRAPH sigdata:graph {
+					?level sig:levelValue ?level_value.
+					?i sig:hasSignature ?i_signature_0.
+					?i_signature_0 a sig:Signature;
+						sig:level siglevels:0;
+						sig:id ?i_signature_0_id.
+					OPTIONAL {
+						?i sig:hasObjectPropertySignature ?object_property_signature.
+						?object_property_signature a sig:ObjectPropertySignature;
+							sig:level ?level;
+							sig:id ?object_property_signature_id.
+					}
 				}
 			}
-			GROUP BY
-				?last_signature_level_value
-				?i ?i_signature_0_id ?p_o_type_sig
-			ORDER BY ?i ?p_o_type_sig
+			ORDER BY
+				?i ?object_property_signature_id
 		}
 		GROUP BY
-			?last_signature_level_value
-			?i ?i_signature_0_id
+			?level_value ?level ?i ?i_signature_0_id
 	}
 
-	BIND(?last_signature_level_value + 1 AS ?next_signature_level_value)
-	BIND(IRI(CONCAT(STR(siglevels:), STR(?next_signature_level_value))) AS ?next_signature_level)
-
 	BIND(
-		IF(?i_signature_0_id,
-			IF(BOUND(?p_o_signature),
-				CONCAT(?i_signature_0_id, '; ', ?p_o_signature),
-				?i_signature_0_id
-			),
-			IF(BOUND(?p_o_signature),
-				?p_o_signature,
-				''
-			)
-		) AS ?new_signature_id
+		SHA1(CONCAT(?i_signature_0_id, ';', COALESCE(?obj_signature, '')))
+		AS ?new_signature_id
 	)
+
 	# Level-specific IRI (see signatures-base.ru): the id alone is not unique across levels.
-	BIND(IRI(CONCAT(STR(sigs:), STR(?next_signature_level_value), '/', ENCODE_FOR_URI(STR(?new_signature_id)))) AS ?new_signature)
-
-}
-
+	BIND(IRI(CONCAT(STR(sigs:), STR(?level_value), '/', ENCODE_FOR_URI(STR(?new_signature_id)))) AS ?new_signature)
+};

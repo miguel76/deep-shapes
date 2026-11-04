@@ -32,7 +32,8 @@ WHERE {
 		WHERE {
 			GRAPH sigdata:graph {
 				?level sig:levelValue ?level_value.
-				?sig sig:level ?level.
+				?sig a sig:Signature;
+					sig:level ?level.
 			}
 		}
 		GROUP BY ?level_value
@@ -45,7 +46,8 @@ WHERE {
 			WHERE {
 				GRAPH sigdata:graph {
 					?previous_level sig:levelValue ?previous_level_value.
-					?previous_sig sig:level ?previous_level.
+					?previous_sig a sig:Signature;
+						sig:level ?previous_level.
 				}
 			}
 			GROUP BY ?previous_level_value
