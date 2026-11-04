@@ -39,10 +39,12 @@ WHERE {
 	FILTER(?final_level_value = ?last_level_value - 1)
 };
 
-# 2. Remove the links from resources to their highest-level signatures.
+# 2. Remove the links to the highest-level signatures (sig:hasSignature,
+# sig:hasObjectPropertySignature, sig:hasObjectPathSignature) and the
+# source/target pairs of its object path signatures.
 DELETE {
 	GRAPH sigdata:graph {
-		?i sig:hasSignature ?signature.
+		?x ?link ?signature.
 	}
 }
 WHERE {
@@ -59,7 +61,31 @@ WHERE {
 	GRAPH sigdata:graph {
 		?last_level sig:levelValue ?last_level_value.
 		?signature sig:level ?last_level.
-		?i sig:hasSignature ?signature.
+		?x ?link ?signature.
+	}
+};
+
+DELETE {
+	GRAPH sigdata:graph {
+		?pair ?p ?o.
+	}
+}
+WHERE {
+	{
+		SELECT (MAX(?level_value) AS ?last_level_value)
+		WHERE {
+			GRAPH sigdata:graph {
+				?level a sig:SignatureLevel;
+					sig:levelValue ?level_value.
+			}
+		}
+	}
+	FILTER(?last_level_value > 0)
+	GRAPH sigdata:graph {
+		?last_level sig:levelValue ?last_level_value.
+		?signature sig:level ?last_level;
+			sig:hasSourceTargetPair ?pair.
+		?pair ?p ?o.
 	}
 };
 

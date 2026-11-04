@@ -75,11 +75,14 @@ default graph: use quads (N-Quads or TriG), or load triples with
   after running at least two levels.
 - Signature IRIs include the level: `sig/signatures/{level}/{ENCODE_FOR_URI(id)}`.
   The same id string can legitimately appear at several levels (a resource with
-  no object links keeps its level-0 id), so dropping the level from the IRI
-  reintroduces duplicate signatures.
-- From level 2 on, `signatures-rec.ru` references targets as `#` + SHA1 of
-  their previous-level id (level 1 embeds full level-0 ids). Embedding full ids
-  at every level makes ids grow exponentially on cyclic data.
+  no object links keeps the same id at every level from 1 on), so dropping the
+  level from the IRI reintroduces duplicate signatures.
+- Every id is a SHA-1 hash, and `signatures-rec.ru` embeds the targets'
+  previous-level ids (hashes). Embedding unhashed ids makes ids grow
+  exponentially on cyclic data.
+- Each level stores intermediate signatures (type, datatype/object path and
+  property signatures) with the same `sig:level`. Anything that counts or
+  compares signatures per level must restrict to `a sig:Signature`.
 - Convergence is detected by signature counts per level, not by ids
   (`queries/convergence.rq`): on cyclic data ids keep changing even when the
   partition is stable.
