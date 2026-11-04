@@ -125,15 +125,85 @@ making resources appear to have more than one signature per level.
 Expected invariant: **every signed resource has exactly one signature per
 level.** `queries/duplicate-shapes.rq` checks this for level 1.
 
+## Refinement and convergence
+
+Group resources by their signature at level n; call that partition P(n).
+
+### Each level refines the previous one
+
+If two resources have the same level-(n+1) signature, they also have the same
+level-n signature. So P(n+1) refines P(n), and the number of distinct
+signatures never decreases from one level to the next.
+
+By induction on n:
+
+- **n = 0.** The level-1 id starts with the level-0 id, so equal level-1 ids
+  imply equal level-0 ids.
+- **Step.** Assume P(n) refines P(n-1), so the level-(n-1) signature of a
+  resource is a function of its level-n signature. Take two resources with the
+  same level-(n+1) id. They have the same level-0 id and the same groups
+  `(property set, level-n target signature, capped count)`. Their level-n ids
+  consist of the same level-0 id plus the groups
+  `(property set, level-(n-1) target signature, capped count)`, obtained by
+  mapping each level-n target signature to its level-(n-1) signature and
+  merging groups that become equal. Merging adds the counts of disjoint target
+  sets, and the capped total depends only on the capped parts: it is `n` if any
+  part is `n` or the exact sum exceeds 5, and the exact sum otherwise. So both
+  resources get the same level-n id.
+
+Capping counts at `n` therefore does not break refinement. It only makes each
+P(n) coarser than it would be with exact counts.
+
+The argument assumes the ids are unambiguous strings, i.e. two different
+structures never produce the same id. That holds because IRIs are written
+between `<` and `>`, which cannot occur inside an IRI, and nested ids are
+wrapped in balanced `[`…`]`.
+
+### Convergence
+
+The same set of resources is signed at every level, and the number of
+distinct signatures can't exceed the number of resources. So the count can
+increase only finitely many times. Once two consecutive levels have the same
+count, P(n+1) = P(n), and every later level has the same partition too: the
+level-(n+1) signatures are then a one-to-one renaming of the level-n ones, so
+the groups at level n+2 are a renaming of those at level n+1, with nothing
+merged. This is the usual stopping rule for colour refinement
+(Weisfeiler–Lehman): **stop at the first level whose signature count equals the
+previous level's**. Since each level before that adds at least one signature,
+this happens after at most (number of signed resources − number of level-0
+signatures) levels. A chain of k nodes that differ only by their distance to
+the end needs about k levels.
+
+Partitions converge, but ids don't. On acyclic data the ids eventually stop
+changing. With cycles, each level's ids embed the previous level's, so they
+keep growing (see below). If deep levels are needed, a cheaper encoding would
+be to refer to targets by a short identifier of their level-n signature (e.g.
+a hash, or the signature IRI) instead of embedding the full id. The partitions
+would be the same, at the cost of ids that aren't human-readable on their own.
+
+### Empirical check
+
+Both properties were checked with Jena 5.2 on two synthetic graphs, using a
+query that looks for two resources with the same level-(n+1) signature but
+different level-n signatures (none were found at any level):
+
+- an 80-node random graph with out-degrees up to 9 (so the cap is exercised):
+  6 signatures at level 0, then 78 from level 1 through level 6;
+- a 9-node chain of typed nodes: 2, 3, 4, …, 10 signatures at levels 0–8, then
+  stable at 10.
+
 ## Known limitations and quirks
 
 - **Ordering inside ids relies on Jena.** The updates sort with `ORDER BY` in
   subqueries and then `GROUP_CONCAT`. SPARQL doesn't guarantee that
   `GROUP_CONCAT` follows that order; Jena does in practice, but another engine
   might produce different ids for the same structure.
-- **The level-n partition may not strictly refine level n-1.** Counts are
-  capped at `n` (> 5), so two resources can share a level-(n+1) id even with
-  different numbers of links at deeper levels.
+- **Ids keep growing after convergence when the graph has cycles.** Each level
+  nests the previous level's ids, so on cyclic data the longest id grows by
+  roughly the out-degree factor per level, even once the partition no longer
+  changes (see [Convergence](#convergence)). On an 80-node random test graph
+  the longest id went from 794 characters at level 1 to 9.4 million at level 6,
+  and Jena ran out of heap computing level 7.
 - **The signature graph is visible in the default graph.** Because of
   `tdb2:unionDefaultGraph true`, queries over the default graph (including the
   updates themselves and `queries/without-signature.rq`) also see the
