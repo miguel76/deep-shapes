@@ -54,31 +54,33 @@ have no level and they have no `sig:level`. Only the level-0 node signature
    `sig/source-target-pairs/{hash}`) with `sig:source`, `sig:target` and
    `sig:hasPathSignature`, and the properties of a sample pair as
    `?path_sig sig:hasMemberProperty ?p`.
-3. **Datatype property signature** (`sig:DatatypePropertySignature`, IRI
-   `sig/signatures/datatype-properties/{id}`): per resource, datatype path
-   signature, datatype and language tag, id = SHA-1 of
-   ```
-   {path signature id}; ^^<datatype> @lang;{count}
-   ```
-   where ` @lang` appears only for language-tagged literals and `{count}` is
-   the number of distinct literals, written `n` when greater than 5. It
-   stores `sig:containsDatatypePathSignature`, `sig:hasTargetDatatype`,
-   `sig:hasTargetLanguage` (language-tagged literals only), and either
-   `sig:hasExactValueCount` (the count, when at most 5) or
-   `sig:hasMinValueCount` (6, when the count is greater than 5). Linked with
-   `?i sig:hasDatatypePropertySignature ?prop_sig`.
-4. **Base node signature** (`sig:BaseNodeSignature`, IRI
+3. **Base node signature** (`sig:BaseNodeSignature`, IRI
    `sig/signatures/base-nodes/{id}`): id = SHA-1 of
    ```
-   {type signature id};{datatype property signature ids, sorted, space-separated}
+   {type signature id};{datatype keys, sorted, space-separated}
    ```
-   It stores `sig:containsTypeSignature` and
-   `sig:containsDatatypePropertySignature`. Linked with
+   where a *datatype key* is SHA-1 of
+   `{datatype path signature id}; ^^<datatype> @lang`, one per distinct
+   (path signature, datatype, language tag) of the resource's literals
+   (` @lang` only for language-tagged literals). Value counts are **not**
+   part of the id: resources that differ only by how many literals they have
+   for some keys get the same base node signature (see "Merged value counts"
+   below). It stores `sig:containsTypeSignature`. Linked with
    `?i sig:hasBaseNodeSignature ?base_sig`.
-5. **Level-0 node signature** (`sig:NodeSignature`, IRI
+4. **Level-0 node signature** (`sig:NodeSignature`, IRI
    `sig/signatures/nodes/0/{id}`): same id as the base node signature, with
    `sig:level <sig/levels/0>` and `sig:containsBaseNodeSignature`. Linked with
    `?i sig:hasNodeSignature ?sig`.
+5. **Datatype property signature** (`sig:DatatypePropertySignature`, IRI
+   `sig/signatures/datatype-properties/{id}`): one per base node signature
+   and datatype key, with the value count interval of its members (see
+   "Merged value counts"). id = SHA-1 of `{datatype key};{min}..{max}`, with
+   `*` for no maximum, so base node signatures with the same key and interval
+   share it. It stores `sig:containsDatatypePathSignature`,
+   `sig:hasTargetDatatype`, `sig:hasTargetLanguage` (language-tagged literals
+   only), `sig:hasMinValueCount` and `sig:hasMaxValueCount` (when bounded).
+   Linked with `?base_sig sig:containsDatatypePropertySignature ?prop_sig`
+   and, for every member, `?i sig:hasDatatypePropertySignature ?prop_sig`.
 6. **Object path signature** (`sig:ObjectPathSignature`, IRI
    `sig/signatures/object-paths/{id}`): as the datatype path signature, but
    for (resource, non-literal target) pairs, with their own
@@ -88,6 +90,33 @@ Object (non-literal) values are not part of the level-0 signature. A
 resource with neither types nor literals (e.g. a class such as `ex:City`
 above) gets the type signature of the empty string and no datatype property
 signatures; all such resources share one level-0 signature.
+
+### Merged value counts
+
+Signatures don't distinguish resources by value counts: two resources whose
+signatures would differ only by the number of values of some of their
+properties get the same signature, and the property signatures of that
+signature store the minimal interval containing the counts of all its
+members. This happens at every level (datatype properties at level 0,
+object properties at each level n ≥ 1), which keeps the number of signatures
+down.
+
+- The count of a member for a key is the number of distinct values
+  (literals, or targets with that level-n signature).
+- `sig:hasMinValueCount` is the smallest count, and `sig:hasMaxValueCount`
+  the largest one.
+- Counts greater than 5 are only known as "more than 5" (as before the
+  merge, when a count above 5 was written `n` and stored as
+  `sig:hasMinValueCount 6`): such a member contributes 6 to the minimum and
+  leaves the interval without a maximum (no `sig:hasMaxValueCount`).
+- Only the counts are merged: the *set* of keys must be the same. A resource
+  without a key is not treated as having count 0 for it, so it keeps a
+  different signature.
+
+Datatype intervals are computed over the members of the base node
+signature, which can be more resources than those of a higher-level node
+signature that contains it: the interval is then valid but possibly wider
+than that node signature's own members need.
 
 The data patterns read only graphs other than the signature graph
 (`GRAPH ?g { ... } FILTER(?g != sigdata:graph)`), since the intermediate
@@ -104,28 +133,30 @@ The update finds the highest existing level `n`, adds the level `n+1`
 signatures (computed once by `signatures-base.ru`) and the targets' level-n
 signatures:
 
-1. **Object property signature** (`sig:ObjectPropertySignature`, IRI
-   `sig/signatures/object-properties/{n+1}/{id}`): per resource, object path
-   signature and target's level-n signature, id = SHA-1 of
-   ```
-   {object path signature id};{target's level-n signature id};{count}
-   ```
-   where `{count}` is the number of distinct targets (`n` when greater than
-   5). It stores `sig:level`, `sig:containsObjectPathSignature`,
-   `sig:containsTargetNodeSignature` (the targets' level-n node signature)
-   and `sig:hasExactValueCount` or `sig:hasMinValueCount`, as for literals.
-   Linked with `?i sig:hasObjectPropertySignature ?prop_sig`.
-2. **Node signature** (`sig:NodeSignature`, IRI
+1. **Node signature** (`sig:NodeSignature`, IRI
    `sig/signatures/nodes/{n+1}/{id}`): id = SHA-1 of
    ```
-   {base node signature id};{object property signature ids, sorted, space-separated}
+   {base node signature id};{object keys, sorted, space-separated}
    ```
-   for every resource with a base node signature. It stores `sig:level`,
-   `sig:containsBaseNodeSignature`, `sig:containsObjectPropertySignature` and
-   `sig:hasParentSignature`, the level-n signature of the same resources
-   (unique, since each level refines the previous one, see below). A resource
-   without object links gets SHA-1 of `{base id};`: a different id from its
-   level-0 one, but the same one at every level.
+   for every resource with a base node signature, where an *object key* is
+   SHA-1 of `{object path signature id};{target's level-n signature id}`, one
+   per distinct (path signature, target signature) of the resource's object
+   links. As for datatype keys, counts are not part of the id. It stores
+   `sig:level`, `sig:containsBaseNodeSignature` and `sig:hasParentSignature`,
+   the level-n signature of the same resources (unique, since each level
+   refines the previous one, see below). A resource without object links
+   gets SHA-1 of `{base id};`: a different id from its level-0 one, but the
+   same one at every level.
+2. **Object property signature** (`sig:ObjectPropertySignature`, IRI
+   `sig/signatures/object-properties/{n+1}/{id}`): one per level-(n+1) node
+   signature and object key, with the target count interval of its members
+   (see "Merged value counts"). id = SHA-1 of `{object key};{min}..{max}`,
+   with `*` for no maximum. It stores `sig:level`,
+   `sig:containsObjectPathSignature`, `sig:containsTargetNodeSignature` (the
+   targets' level-n node signature), `sig:hasMinValueCount` and
+   `sig:hasMaxValueCount` (when bounded). Linked with
+   `?node_sig sig:containsObjectPropertySignature ?prop_sig` and, for every
+   member, `?i sig:hasObjectPropertySignature ?prop_sig`.
 
 Since every id is a SHA-1 hash, an id embeds its targets' previous-level ids
 without growing with the level, also on cyclic data. Ids are not readable on
@@ -185,7 +216,8 @@ ex:alice sig:hasTypeSignature <sig/signatures/types/...> ;
     sig:containsDatatypePathSignature <sig/signatures/datatype-paths/...> ;
     sig:hasTargetDatatype rdf:langString ;
     sig:hasTargetLanguage "en" ;
-    sig:hasExactValueCount 2 .              # or sig:hasMinValueCount 6
+    sig:hasMinValueCount 2 ;
+    sig:hasMaxValueCount 2 .                # absent when unbounded
 <sig/signatures/datatype-paths/...> a sig:DatatypePathSignature ;
     sig:hasMemberProperty ex:nick .
 <sig/source-target-pairs/...> a sig:SourceTargetPair ;
@@ -203,7 +235,8 @@ ex:alice sig:hasObjectPropertySignature <sig/signatures/object-properties/1/...>
     sig:level <sig/levels/1> ;
     sig:containsObjectPathSignature <sig/signatures/object-paths/...> ;
     sig:containsTargetNodeSignature <sig/signatures/nodes/0/...> ;   # ex:bob's level-0 signature
-    sig:hasExactValueCount 1 .
+    sig:hasMinValueCount 1 ;
+    sig:hasMaxValueCount 1 .
 ```
 
 Only `sig:NodeSignature` nodes are signatures in the sense of the partition;
@@ -234,24 +267,21 @@ By induction on n:
   level-1 ids imply equal level-0 ids.
 - **Step.** Assume P(n) refines P(n-1), so the level-(n-1) signature of a
   resource is a function of its level-n signature. Take two resources with the
-  same level-(n+1) id. They have the same level-0 id and the same groups
-  `(property set, level-n target signature, capped count)`. Their level-n ids
-  consist of the same level-0 id plus the groups
-  `(property set, level-(n-1) target signature, capped count)`, obtained by
-  mapping each level-n target signature to its level-(n-1) signature and
-  merging groups that become equal. Merging adds the counts of disjoint target
-  sets, and the capped total depends only on the capped parts: it is `n` if any
-  part is `n` or the exact sum exceeds 5, and the exact sum otherwise. So both
-  resources get the same level-n id.
+  same level-(n+1) id. They have the same base id and the same set of keys
+  `(property set, level-n target signature)`. Their level-n ids consist of
+  the same base id plus the set of keys
+  `(property set, level-(n-1) target signature)`, which is the image of the
+  first set under the mapping of each level-n target signature to its
+  level-(n-1) signature. So both resources get the same level-n id.
 
-Capping counts at `n` therefore does not break refinement. It only makes each
-P(n) coarser than it would be with exact counts.
+Value counts are not part of the ids (they are merged into intervals), so
+they play no part in the argument.
 
 The argument assumes the ids are unambiguous, i.e. two different structures
 never produce the same id. The strings that get hashed are unambiguous because
 IRIs are written between `<` and `>`, which cannot occur inside an IRI, and
-the other parts are fixed-length hashes or counts, separated by `;`. It also assumes SHA-1 has no collisions among the ids
-computed, which is safe in practice for accidental collisions.
+the other parts are fixed-length hashes, separated by `;`. It also
+assumes SHA-1 has no collisions among the ids computed, which is safe in practice for accidental collisions.
 
 ### Convergence
 

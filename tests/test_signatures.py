@@ -176,6 +176,17 @@ class LayeredChecks(InvariantChecks):
             )
             shape_of_signature[sig] = shape
 
+    def test_final_value_counts_match_shapes(self):
+        """Merged signatures store the interval of their members' value counts."""
+        actual = {}
+        for r in self.query(TESTS / "queries" / "final-value-counts.rq"):
+            interval = [int(r["min"]), int(r["max"]) if r["max"] else None]
+            actual.setdefault(r["i"], {}).setdefault(r["p"], []).append(interval)
+        for shape, nodes in self.expected["groups"].items():
+            expected = {p: [v] for p, v in self.expected["value_counts"][shape].items()}
+            for node in nodes:
+                self.assertEqual(actual.get(node), expected, f"{node} ({shape})")
+
 
 class LayeredTest(LayeredChecks, PipelineTestCase):
     """Two families of binary trees of depth 4, two copies each."""
@@ -194,6 +205,19 @@ class LayeredCappedCountsTest(LayeredChecks, PipelineTestCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.generate("layered", "--families", "3", "--depth", "2", "--fanout", "7")
+        cls.converge()
+
+
+class LayeredVariableFanoutTest(LayeredChecks, PipelineTestCase):
+    """Nodes of a shape have 1 to 7 children: their signatures are merged."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.generate(
+            "layered", "--families", "2", "--depth", "3",
+            "--fanout", "1", "--max-fanout", "7", "--copies", "2",
+        )
         cls.converge()
 
 

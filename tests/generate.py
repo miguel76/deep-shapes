@@ -7,21 +7,27 @@ Two kinds of graph are supported:
     Structured data with a known answer. For each of ``--families`` families
     there are ``--copies`` complete trees of depth ``--depth`` and fan-out
     ``--fanout``. Internal nodes are ``ex:Node`` instances with one
-    ``ex:label`` literal and ``--fanout`` ``ex:child`` links; leaves are
-    ``ex:Leaf`` instances with one literal on a family-specific property
-    ``ex:tag{family}``.
+    ``ex:label`` literal and ``--fanout`` ``ex:child`` links (or a random
+    number between ``--fanout`` and ``--max-fanout``, drawn with ``--seed``);
+    leaves are ``ex:Leaf`` instances with one literal on a family-specific
+    property ``ex:tag{family}``.
 
     Nodes look alike up to the distance at which their leaves become visible,
     so the depth controls how many signature levels are needed to tell all
     structures apart. Besides the data, the generator writes:
 
     - ``shapes.ttl``: the SHACL shapes the data follows, one per family and
-      node height (height 0 = leaf), with ``sh:targetNode`` for every node.
-      These are the shapes a complete pipeline should discover;
+      node height (height 0 = leaf), with ``sh:targetNode`` for every node
+      and the observed ``ex:child`` counts as ``sh:minCount``/``sh:maxCount``.
+      These are the shapes a complete pipeline should discover: nodes that
+      differ only by their number of children share a shape;
     - ``expected.json``: the expected number of signatures at each level, the
-      expected final level after ``scripts/sig-converge.sh``, and the nodes
+      expected final level after ``scripts/sig-converge.sh``, the nodes
       of each shape (resources with the same shape must end up with the same
-      final signature, and different shapes with different signatures).
+      final signature, and different shapes with different signatures), and
+      the value count interval of each property of each shape, as the
+      signatures store it (a count above 5 makes the minimum at most 6 and
+      the maximum unbounded, ``null``).
 
 ``random``
     Unstructured data: ``--nodes`` nodes with random types, an optional
@@ -109,7 +115,10 @@ def generate_layered(args, out):
     if args.depth < 1 or args.families < 1 or args.fanout < 1 or args.copies < 1:
         sys.exit("--depth, --families, --fanout and --copies must be >= 1")
 
+    max_fanout = max(args.fanout, args.max_fanout or args.fanout)
+    rng = random.Random(args.seed)
     groups = {}  # shape IRI -> node IRIs
+    child_counts = {}  # shape IRI -> observed numbers of children
     lines = []
 
     def build(family, height, local):
@@ -121,7 +130,9 @@ def generate_layered(args, out):
             return node
         lines.append(triple(node, f"<{RDF_TYPE}>", iri("Node")))
         lines.append(triple(node, iri("label"), literal(local)))
-        for k in range(args.fanout):
+        fanout = rng.randint(args.fanout, max_fanout)
+        child_counts.setdefault(EX + shape_name(family, height), []).append(fanout)
+        for k in range(fanout):
             child = build(family, height - 1, f"{local}.{k}")
             lines.append(triple(node, iri("child"), child))
         return node
@@ -131,7 +142,7 @@ def generate_layered(args, out):
             build(family, args.depth, f"f{family}/t{copy}/r")
 
     (out / "data.nt").write_text("".join(lines))
-    (out / "shapes.ttl").write_text(layered_shapes(args, groups))
+    (out / "shapes.ttl").write_text(layered_shapes(args, groups, child_counts))
 
     counts = layered_expected_counts(args.families, args.depth, args.depth + 2)
     final_level = layered_final_level(counts)
@@ -142,12 +153,40 @@ def generate_layered(args, out):
         "signature_counts": counts[: final_level + 1],
         "final_level": final_level,
         "groups": groups,
+        "value_counts": layered_value_counts(args, child_counts),
     }
     (out / "expected.json").write_text(json.dumps(expected, indent=2) + "\n")
     return len(lines)
 
 
-def layered_shapes(args, groups):
+def capped_interval(counts):
+    """The interval stored by the signatures for these value counts.
+
+    A count above 5 only tells "more than 5": it contributes 6 to the minimum
+    and leaves the maximum unbounded (None).
+    """
+    low = min(min(c, 6) for c in counts)
+    high = None if max(counts) > 5 else max(counts)
+    return [low, high]
+
+
+def layered_value_counts(args, child_counts):
+    """Shape IRI -> {property IRI: [min, max or None]} (rdf:type excluded)."""
+    result = {}
+    for family in range(args.families):
+        for height in range(args.depth + 1):
+            name = EX + shape_name(family, height)
+            if height == 0:
+                result[name] = {f"{EX}tag{family}": [1, 1]}
+            else:
+                result[name] = {
+                    f"{EX}label": [1, 1],
+                    f"{EX}child": capped_interval(child_counts[name]),
+                }
+    return result
+
+
+def layered_shapes(args, groups, child_counts):
     out = [
         "@prefix sh: <http://www.w3.org/ns/shacl#> .\n",
         "@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n",
@@ -155,7 +194,8 @@ def layered_shapes(args, groups):
         f"@prefix ex: <{EX}> .\n",
         "\n",
         f"# Shapes followed by `generate.py layered` data with families={args.families},\n",
-        f"# depth={args.depth}, fanout={args.fanout}, copies={args.copies}.\n",
+        f"# depth={args.depth}, fanout={args.fanout}, max_fanout={args.max_fanout},\n",
+        f"# copies={args.copies}, seed={args.seed}.\n",
         "# One shape per family and node height (height 0 = leaf). Each shape is\n",
         "# closed and fixes every outgoing property, so nodes of different shapes\n",
         "# differ in structure, and a complete shape-discovery pipeline should find\n",
@@ -174,15 +214,20 @@ def layered_shapes(args, groups):
                 child = shape_name(family, height - 1)
                 out.append(property_shape("rdf:type", "sh:hasValue ex:Node", 1))
                 out.append(property_shape("ex:label", "sh:datatype xsd:string", 1))
-                out.append(property_shape("ex:child", f"sh:node ex:{child}", args.fanout, last=True))
+                counts = child_counts[EX + name]
+                out.append(property_shape(
+                    "ex:child", f"sh:node ex:{child}", min(counts), max(counts), last=True
+                ))
     return "".join(out)
 
 
-def property_shape(path, constraint, count, last=False):
+def property_shape(path, constraint, min_count, max_count=None, last=False):
+    if max_count is None:
+        max_count = min_count
     end = " ." if last else " ;"
     return (
         f"\tsh:property [\n\t\tsh:path {path} ;\n\t\t{constraint} ;\n"
-        f"\t\tsh:minCount {count} ;\n\t\tsh:maxCount {count}\n\t]{end}\n"
+        f"\t\tsh:minCount {min_count} ;\n\t\tsh:maxCount {max_count}\n\t]{end}\n"
     )
 
 
@@ -232,7 +277,11 @@ def main(argv=None):
     p.add_argument("--families", type=int, default=2, help="number of families (default 2)")
     p.add_argument("--depth", type=int, default=3, help="tree depth (default 3)")
     p.add_argument("--fanout", type=int, default=2, help="children per internal node (default 2)")
+    p.add_argument("--max-fanout", type=int, default=None,
+                   help="if greater than --fanout, each internal node gets a random number of "
+                   "children between the two (default: --fanout)")
     p.add_argument("--copies", type=int, default=1, help="trees per family (default 1)")
+    p.add_argument("--seed", type=int, default=7, help="random seed for --max-fanout (default 7)")
 
     p = sub.add_parser("random", help="unstructured random graph")
     p.add_argument("--nodes", type=int, default=80, help="number of nodes (default 80)")

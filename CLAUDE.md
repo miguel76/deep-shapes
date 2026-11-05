@@ -91,6 +91,11 @@ default graph: use quads (N-Quads or TriG), or load triples with
   previous-level signature of the same resources; the converged level is kept
   as the final one (not deleted), so the finalize step can resolve
   `sig:containsTargetNodeSignature` to final signatures through it.
+- Value counts are not part of node signature ids: signatures that differ
+  only by counts are merged, and their datatype/object property signatures
+  store the interval of the members' counts (`sig:hasMinValueCount`, and
+  `sig:hasMaxValueCount` unless a count is above 5). Keep the refinement
+  argument in `docs/signatures.md` valid if you change this.
 - Convergence is detected by signature counts per level, not by ids
   (`queries/convergence.rq`): on cyclic data ids keep changing even when the
   partition is stable.
