@@ -40,7 +40,7 @@ Every IRI is built from signature ids (relative to
 | `{property shape}/{SHA-1 of the property IRI}` | companion property shape for another property of the path |
 | `shapes/literals/{SHA-1 of "<datatype>" or "<datatype> @lang"}` | value shape of qualified datatype property shapes |
 | `shapes/languages/{lang}` | the list `("lang")` for `sh:languageIn` |
-| `shapes/ignored-properties` | the list `(rdf:type)` for `sh:ignoredProperties` |
+| `shapes/types/{type signature id}` | property shape on `rdf:type` (exact set of types) |
 
 There are no blank nodes, not even in lists, so a shape used by several node
 shapes is written once and the output is deterministic.
@@ -53,14 +53,22 @@ One per final node signature, with no target:
 <shapes/nodes/{id}> a sh:NodeShape ;
     sh:class ex:Person ;                      # one per member type, if any
     sh:closed true ;
-    sh:ignoredProperties <shapes/ignored-properties> ;   # (rdf:type)
-    sh:property ... .
+    sh:property <shapes/types/{type signature id}>, ... .
+<shapes/types/{type signature id}> a sh:PropertyShape ;
+    sh:path rdf:type ;
+    sh:hasValue ex:Person ;                   # one per member type, if any
+    sh:minCount 1 ; sh:maxCount 1 .           # the number of types (0 if untyped)
 ```
 
+`sh:class` alone accepts instances of subclasses and resources with more
+types, so the property shape on `rdf:type` fixes the exact set of types: each
+one is required (`sh:hasValue`) and there can be no others (min = max = their
+number). It depends only on the type signature, so node shapes with the same
+types share it.
+
 The shape is closed because a signature describes every outgoing property of
-its members (rdf:type aside, which `sh:class` covers). Every property of a
-path signature is the `sh:path` of some property shape, so closing it
-doesn't reject any member.
+its members. Every property of a path signature, and `rdf:type`, is the
+`sh:path` of some property shape, so closing it doesn't reject any member.
 
 ## Property shapes
 
@@ -154,8 +162,9 @@ The tests add `sh:targetNode` for every resource to the shape of its final
 signature (`tests/queries/shapes-with-targets.rq`) and validate the data
 with Jena SHACL: the `layered` graphs and `tests/data/people-places.ttl`
 conform to their shapes. `tests/queries/shape-structure.rq` checks the
-structure (one shape per final signature, one property shape per property
-signature and property, no shape both qualified and unqualified) on every
+structure (one shape per final signature, one `rdf:type` property shape per node
+shape, one property shape per property signature and property, no shape both
+qualified and unqualified) on every
 test graph, and `tests/expected/people-places-shapes.nt` is a snapshot of
 the shapes of `people-places.ttl`.
 
@@ -168,10 +177,6 @@ the shapes of `people-places.ttl`.
   counts both, and the members don't conform with a standard SHACL engine.
   Data with such overlaps (frequent in the `random` test graph) needs an
   engine that reads the qualified shapes as exact path sets.
-- **Types are not exact.** `sh:class` accepts instances of subclasses and
-  doesn't exclude other types, so a resource with more types also conforms
-  to a shape with fewer. Qualified counts on object properties whose targets
-  differ only in that way count the same targets twice.
 - **Language ranges.** `sh:languageIn ("en")` also accepts `en-US`, while
   signatures distinguish the two tags.
 - **Capped counts.** Above 5 values, only the minimum (6) is known.

@@ -373,6 +373,13 @@ class ShapesTest(PipelineTestCase):
         self.assertIn("Equals", report)
         self.assertIn("QualifiedValueShape", report)
 
+    def test_extra_type_does_not_conform(self):
+        changed = self.tmp / "extra-type.ttl"
+        changed.write_text(self.data.read_text() + "ex:bob a ex:Agent .\n")
+        report = self.validate(self.shapes_file, changed)
+        self.assertRegex(report, r"sh:conforms\s+false", report)
+        self.assertIn("MaxCount", report)
+
 
 if __name__ == "__main__":
     unittest.main()

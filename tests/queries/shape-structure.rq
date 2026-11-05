@@ -19,6 +19,8 @@ PREFIX shapedata: <shapes/>
 # - "all property shape count": a node shape whose number of property shapes
 #   (main and companions) differs from the number of (property signature,
 #   property of its path) pairs of its node signature;
+# - "type shape count": a node shape without exactly one property shape on
+#   rdf:type;
 # - "mixed qualification": a property shape with both qualified and
 #   unqualified constraints.
 
@@ -67,6 +69,7 @@ WHERE {
 					GRAPH shapedata:graph {
 						?shape sh:property ?property_shape.
 						FILTER NOT EXISTS { ?property_shape sh:equals|sh:qualifiedEquals ?main }
+						FILTER NOT EXISTS { ?property_shape sh:path rdf:type }
 					}
 				}
 			}
@@ -98,12 +101,31 @@ WHERE {
 			SELECT ?x (COUNT(DISTINCT ?property_shape) AS ?actual)
 			WHERE {
 				GRAPH sigdata:graph { ?x sig:hasShape ?shape }
-				GRAPH shapedata:graph { ?shape sh:property ?property_shape }
+				GRAPH shapedata:graph {
+					?shape sh:property ?property_shape.
+					FILTER NOT EXISTS { ?property_shape sh:path rdf:type }
+				}
 			}
 			GROUP BY ?x
 		}
 		FILTER(?expected != ?actual)
 		BIND("all property shape count" AS ?problem)
+	} UNION {
+		{
+			SELECT ?x (COUNT(DISTINCT ?type_shape) AS ?type_shapes)
+			WHERE {
+				GRAPH sigdata:graph { ?x sig:hasShape ?shape }
+				OPTIONAL {
+					GRAPH shapedata:graph {
+						?shape sh:property ?type_shape.
+						?type_shape sh:path rdf:type.
+					}
+				}
+			}
+			GROUP BY ?x
+		}
+		FILTER(?type_shapes != 1)
+		BIND("type shape count" AS ?problem)
 	} UNION {
 		GRAPH shapedata:graph {
 			?x sh:qualifiedValueShape ?value_shape.

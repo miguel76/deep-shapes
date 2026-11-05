@@ -14,7 +14,9 @@ PREFIX shapedata: <shapes/>
 # shapes generated before. Does nothing if no level is final yet.
 #
 # - One node shape per final node signature, `shapes/nodes/{id}`, without
-#   targets, with sh:class for each member type, closed (rdf:type aside).
+#   targets, with sh:class for each member type, closed, and a property
+#   shape on rdf:type, `shapes/types/{type signature id}`, that fixes the
+#   exact set of types (sh:hasValue for each, min = max = their number).
 # - One property shape per datatype or object property signature of the node
 #   signature, on the smallest property (by IRI) of its path signature (the
 #   main property), with the value count as min/max count. The other
@@ -36,16 +38,20 @@ DELETE WHERE {
 	}
 };
 
-# 1. Node shapes.
+# 1. Node shapes, with the rdf:type property shape. sh:class alone would
+# accept instances of subclasses and extra types; the property shape makes
+# the set of types exact (an untyped signature gets sh:maxCount 0).
 INSERT {
 	GRAPH shapedata:graph {
 		?node_shape a sh:NodeShape;
 			sh:class ?type;
 			sh:closed true;
-			sh:ignoredProperties shapedata:ignored-properties.
-		# Shared list (an IRI, so that it isn't repeated for every shape).
-		shapedata:ignored-properties rdf:first rdf:type;
-			rdf:rest rdf:nil.
+			sh:property ?type_shape.
+		?type_shape a sh:PropertyShape;
+			sh:path rdf:type;
+			sh:hasValue ?type;
+			sh:minCount ?type_count;
+			sh:maxCount ?type_count.
 	}
 	GRAPH sigdata:graph {
 		?node_signature sig:hasShape ?node_shape
@@ -58,9 +64,21 @@ WHERE {
 			sig:level ?final_level;
 			sig:id ?node_signature_id;
 			sig:containsBaseNodeSignature/sig:containsTypeSignature ?type_signature.
+		?type_signature sig:id ?type_signature_id.
 		OPTIONAL { ?type_signature sig:hasMemberType ?type }
 	}
+	{
+		SELECT ?type_signature (COUNT(DISTINCT ?member_type) AS ?type_count)
+		WHERE {
+			GRAPH sigdata:graph {
+				?type_signature a sig:TypeSignature.
+				OPTIONAL { ?type_signature sig:hasMemberType ?member_type }
+			}
+		}
+		GROUP BY ?type_signature
+	}
 	BIND(IRI(CONCAT(STR(shapedata:), 'nodes/', ENCODE_FOR_URI(?node_signature_id))) AS ?node_shape)
+	BIND(IRI(CONCAT(STR(shapedata:), 'types/', ENCODE_FOR_URI(?type_signature_id))) AS ?type_shape)
 };
 
 # 2. Property shapes, one per (node signature, property signature) and, for
