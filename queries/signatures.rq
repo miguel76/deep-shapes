@@ -15,9 +15,9 @@ WHERE {
   GRAPH sigdata:graph {
 	?sig_level a sig:SignatureLevel;
 		sig:levelValue ?sig_level_value.
-	?sig a sig:Signature;
+	?sig a sig:NodeSignature;
 		sig:level ?sig_level.
-	?s sig:hasSignature ?sig
+	?s sig:hasNodeSignature ?sig
   }
 }
 GROUP BY ?sig_level ?sig_level_value

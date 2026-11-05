@@ -23,7 +23,7 @@ WHERE {
 	GRAPH sigdata:graph {
 		?level sig:levelValue ?last_level_value.
 		?sig sig:level ?level.
-		?i sig:hasSignature ?sig.
+		?i sig:hasNodeSignature ?sig.
 	}
 }
 ORDER BY ?i

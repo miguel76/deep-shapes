@@ -15,7 +15,7 @@ WHERE {
       (COUNT(1) as ?signatures)
     WHERE {
       GRAPH sigdata:graph {
-        ?i sig:hasSignature [
+        ?i sig:hasNodeSignature [
             sig:level siglevels:1;
             sig:id ?sig_id
         ]
@@ -25,7 +25,7 @@ WHERE {
        ?i
   }
   FILTER(?signatures > 1)
-  ?i sig:hasSignature ?sig.
+  ?i sig:hasNodeSignature ?sig.
   ?sig
       sig:level siglevels:1;
       sig:id ?sig_id

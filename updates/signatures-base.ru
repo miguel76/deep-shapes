@@ -6,6 +6,7 @@ PREFIX sig: <https://w3id.org/sig/>
 PREFIX sigdata: <sig/>
 PREFIX siglevels: <sig/levels/>
 PREFIX sigs: <sig/signatures/>
+PREFIX stpairs: <sig/source-target-pairs/>
 
 DROP SILENT GRAPH sigdata:graph;
 
@@ -19,7 +20,6 @@ INSERT DATA {
 INSERT {
 	GRAPH sigdata:graph {
 		?i_type_signature a sig:TypeSignature;
-			sig:level siglevels:0;
 			sig:id ?i_type_signature_id.
 		?i sig:hasTypeSignature ?i_type_signature
 	}
@@ -53,21 +53,18 @@ WHERE {
 		}
 		GROUP BY ?i
 	}
-	BIND(IRI(CONCAT(STR(sigs:), 'types/0/', ENCODE_FOR_URI(STR(?i_type_signature_id)))) AS ?i_type_signature)
+	BIND(IRI(CONCAT(STR(sigs:), 'types/', ENCODE_FOR_URI(STR(?i_type_signature_id)))) AS ?i_type_signature)
 };
 
 INSERT {
 	GRAPH sigdata:graph {
-		?i_type_signature
-			sig:hasMemberType ?i_type.
+		?i_type_signature sig:hasMemberType ?i_type
 	}
 }
 WHERE {
 	{
 		SELECT ?i_type_signature (SAMPLE(?i_member) AS ?i)
 		WHERE {
-			?i_type_signature a sig:TypeSignature;
-				sig:level siglevels:0.
 			?i_member sig:hasTypeSignature ?i_type_signature.
 		}
 		GROUP BY ?i_type_signature
@@ -81,12 +78,11 @@ WHERE {
 INSERT {
 	GRAPH sigdata:graph {
 		?datatype_path_signature a sig:DatatypePathSignature;
-			sig:level siglevels:0;
-			sig:id ?datatype_path_signature_id;
-			sig:hasSourceTargetPair [
-				sig:source ?i;
-				sig:target ?o
-			].
+			sig:id ?datatype_path_signature_id.
+		?source_target_pair a sig:SourceTargetPair;
+			sig:source ?i;
+			sig:target ?o;
+			sig:hasPathSignature ?datatype_path_signature.
 	}
 }
 WHERE {
@@ -108,16 +104,18 @@ WHERE {
 		}
 		GROUP BY ?i ?o
 	}
+	BIND(SHA1(?link_signature_str) AS ?datatype_path_signature_id)
+	BIND(IRI(CONCAT(STR(sigs:), 'datatype-paths/', ENCODE_FOR_URI(?datatype_path_signature_id))) AS ?datatype_path_signature)
 	BIND(DATATYPE(?o) AS ?o_type)
 	BIND(LANG(?o) AS ?o_lang)
 	BIND(CONCAT(' ^^<', STR(?o_type), '>', IF(?o_lang, CONCAT(' @', STR(?o_lang)), '')) AS ?o_signature_str)
-	BIND(SHA1(CONCAT(?link_signature_str, ?o_signature_str)) AS ?datatype_path_signature_id)
-	BIND(IRI(CONCAT(STR(sigs:), 'datatype-values/0/', ENCODE_FOR_URI(?datatype_path_signature_id))) AS ?datatype_path_signature)
+	BIND(IRI(CONCAT(STR(stpairs:), SHA1(CONCAT(STR(?i), ' "', STR(?o), '"', ?o_signature_str)))) AS ?source_target_pair)
 };
 
 INSERT {
 	GRAPH sigdata:graph {
-		?datatype_path_signature sig:hasMemberProperty ?p.
+		?datatype_path_signature
+			sig:hasMemberProperty ?p;
 	}
 }
 WHERE {
@@ -125,8 +123,7 @@ WHERE {
 		SELECT ?datatype_path_signature (SAMPLE(?st) AS ?source_target)
 		WHERE {
 			?datatype_path_signature a sig:DatatypePathSignature;
-				sig:level siglevels:0;
-				sig:hasSourceTargetPair ?st.
+				^sig:hasPathSignature ?st.
 		}
 		GROUP BY ?datatype_path_signature
 	}
@@ -134,7 +131,7 @@ WHERE {
 		sig:source ?source;
 		sig:target ?target.
 	?source ?p ?target.
-	FILTER(?p != rdf:type && isLITERAL(?target)).
+	FILTER(?p != rdf:type).
 	# FILTER NOT EXISTS {
 	# 	?i ?p_spec ?o.
 	# 	?p_spec rdfs:subPropertyOf+ ?p.
@@ -144,9 +141,10 @@ WHERE {
 INSERT {
 	GRAPH sigdata:graph {
 		?datatype_property_signature a sig:DatatypePropertySignature;
-			sig:level siglevels:0;
 			sig:id ?datatype_property_signature_id;
-			sig:hasDatatypePathSignature ?datatype_path_signature;
+			sig:containsDatatypePathSignature ?datatype_path_signature;
+			sig:hasTargetDatatype ?o_type;
+			sig:hasTargetLanguage ?o_lang;
 			sig:hasExactValueCount ?exact_datatype_value_count;
 			sig:hasMinValueCount ?min_datatype_value_count.
 		?i sig:hasDatatypePropertySignature ?datatype_property_signature
@@ -160,9 +158,8 @@ WHERE {
 		WHERE {
 			GRAPH sigdata:graph {
 				?datatype_path_signature a sig:DatatypePathSignature;
-					sig:level siglevels:0;
 					sig:id ?datatype_path_signature_id;
-					sig:hasSourceTargetPair [
+					^sig:hasPathSignature [
 						sig:source ?i;
 						sig:target ?o
 					].
@@ -171,30 +168,36 @@ WHERE {
 		GROUP BY
 			?i ?datatype_path_signature ?datatype_path_signature_id
 	}
+	BIND(DATATYPE(?o) AS ?o_type)
+	BIND(LANG(?o) AS ?o_lang)
+	BIND(CONCAT(' ^^<', STR(?o_type), '>', IF(?o_lang, CONCAT(' @', STR(?o_lang)), '')) AS ?o_signature_str)
 	VALUES ?count_limit {5}
 	VALUES ?undef {UNDEF}
 	BIND(IF(?datatype_value_count > ?count_limit, ?undef, ?datatype_value_count) AS ?exact_datatype_value_count)
 	BIND(IF(?datatype_value_count > ?count_limit, ?count_limit + 1, ?undef) AS ?min_datatype_value_count)
 	BIND(IF(?datatype_value_count > ?count_limit, 'n', STR(?datatype_value_count)) AS ?datatype_value_count_str)
-	BIND(SHA1(CONCAT(?datatype_path_signature_id, ?datatype_value_count_str)) AS ?datatype_property_signature_id)
-	BIND(IRI(CONCAT(STR(sigs:), 'datatype-properties/0/', ENCODE_FOR_URI(?datatype_property_signature_id))) AS ?datatype_property_signature)
+	BIND(SHA1(CONCAT(?datatype_path_signature_id, ';', ?o_signature_str, ';', ?datatype_value_count_str)) AS ?datatype_property_signature_id)
+	BIND(IRI(CONCAT(STR(sigs:), 'datatype-properties/', ENCODE_FOR_URI(?datatype_property_signature_id))) AS ?datatype_property_signature)
 };
 
 
 INSERT {
 	GRAPH sigdata:graph {
-		siglevels:0 a sig:SignatureLevel;
-			sig:levelValue 0.
-		?base_node_signature a sig:Signature;
+		?base_node_signature a sig:BaseNodeSignature;
+			sig:id ?base_node_signature_id;
+			sig:containsTypeSignature ?i_type_signature.
+		?i sig:hasBaseNodeSignature ?base_node_signature.
+		?node_signature a sig:NodeSignature;
 			sig:level siglevels:0;
-			sig:id ?base_node_signature_id.
-		?i sig:hasSignature ?base_node_signature
+			sig:id ?base_node_signature_id;
+			sig:containsBaseNodeSignature ?base_node_signature.
+		?i sig:hasNodeSignature ?node_signature
 	}
 }
 WHERE {
 	{
 		SELECT
-			?i ?i_type_signature_id
+			?i ?i_type_signature ?i_type_signature_id
 			(GROUP_CONCAT(?datatype_property_signature_id) AS ?dt_signature)
 		WHERE {
 			SELECT
@@ -207,7 +210,6 @@ WHERE {
 					OPTIONAL {
 						?i sig:hasDatatypePropertySignature ?datatype_property_signature.
 						?datatype_property_signature a sig:DatatypePropertySignature;
-							sig:level siglevels:0;
 							sig:id ?datatype_property_signature_id.
 					}
 				}
@@ -216,7 +218,7 @@ WHERE {
 				?i ?datatype_property_signature_id
 		}
 		GROUP BY
-			?i ?i_type_signature_id
+			?i ?i_type_signature ?i_type_signature_id
 	}
 
   	BIND(
@@ -224,11 +226,91 @@ WHERE {
 		AS ?base_node_signature_id
 	)
 
+	BIND(IRI(CONCAT(STR(sigs:), 'base-nodes/', ENCODE_FOR_URI(STR(?base_node_signature_id)))) AS ?base_node_signature)
+
 	# The level is part of the signature IRI: the same id string can occur at
 	# several levels (e.g. a resource without object links keeps its level-0 id
 	# at every level), and a shared node would end up with several sig:level
 	# values, making other resources appear to have several signatures per level.
-	BIND(IRI(CONCAT(STR(sigs:), '0/', ENCODE_FOR_URI(STR(?base_node_signature_id)))) AS ?base_node_signature)
+	BIND(IRI(CONCAT(STR(sigs:), 'nodes/0/', ENCODE_FOR_URI(STR(?base_node_signature_id)))) AS ?node_signature)
 
+};
+
+INSERT {
+	GRAPH sigdata:graph {
+		?base_node_signature sig:containsDatatypePropertySignature ?datatype_property_signature
+	}
+}
+WHERE {
+	{
+		SELECT ?base_node_signature (SAMPLE(?i_member) AS ?i)
+		WHERE {
+			?i_member sig:hasBaseNodeSignature ?base_node_signature
+		}
+		GROUP BY ?base_node_signature
+	}
+	GRAPH sigdata:graph {
+		?i sig:hasDatatypePropertySignature ?datatype_property_signature
+	}
+};
+
+INSERT {
+	GRAPH sigdata:graph {
+		?object_path_signature a sig:ObjectPathSignature;
+			sig:id ?object_path_signature_id.
+		?source_target_pair a sig:SourceTargetPair;
+			sig:source ?i;
+			sig:target ?o;
+			sig:hasPathSignature ?object_path_signature.
+	}
+}
+WHERE {
+	{
+		SELECT
+			?i ?o
+			(GROUP_CONCAT(CONCAT('<',STR(?p),'>'); separator="|") AS ?link_signature_str)
+		WHERE {
+			SELECT ?i ?o ?p
+			WHERE {
+				GRAPH ?g { ?i ?p ?o }
+				FILTER(?g != sigdata:graph && ?p != rdf:type)
+			}
+			ORDER BY ?i ?o ?p
+		}
+		GROUP BY ?i ?o
+	}
+	# Target signature ids are SHA-1 hashes, so ids don't grow with the level.
+	BIND(SHA1(?link_signature_str) AS ?object_path_signature_id)
+	BIND(IRI(CONCAT(STR(sigs:), 'object-paths/', ENCODE_FOR_URI(?object_path_signature_id))) AS ?object_path_signature)
+	BIND(IRI(CONCAT(STR(stpairs:), SHA1(CONCAT(STR(?i), ' "', STR(?o))))) AS ?source_target_pair)
+};
+
+INSERT {
+	GRAPH sigdata:graph {
+		?object_path_signature sig:hasMemberProperty ?p.
+	}
+}
+WHERE {
+	{
+		SELECT ?object_path_signature (SAMPLE(?st) AS ?source_target)
+		WHERE {
+			GRAPH sigdata:graph {
+				?object_path_signature a sig:ObjectPathSignature;
+					^sig:hasPathSignature ?st.
+			}
+		}
+		GROUP BY ?object_path_signature
+	}
+	GRAPH sigdata:graph {
+		?source_target
+			sig:source ?source;
+			sig:target ?target.
+	}
+	GRAPH ?g { ?source ?p ?target }
+	FILTER(?g != sigdata:graph && ?p != rdf:type).
+	# FILTER NOT EXISTS {
+	# 	?i ?p_spec ?o.
+	# 	?p_spec rdfs:subPropertyOf+ ?p.
+	# }
 };
 

@@ -51,20 +51,20 @@ level are SHA-1 hashes (hex) of a canonical string.
    that *same* literal (usually one; several only when a literal is shared, as
    with `ex:name` and `rdfs:label` both being `"Alice"` above), and `@lang`
    appears only for language-tagged literals. Each pair is stored as
-   `?path_sig sig:hasSourceTargetPair [ sig:source ?i ; sig:target ?literal ]`,
+   `?path_sig ^sig:hasPathSignature [ sig:source ?i ; sig:target ?literal ]`,
    and the properties of a sample pair as `?path_sig sig:hasMemberProperty ?p`.
 3. **Datatype property signature** (`sig:DatatypePropertySignature`, IRI
    `sig/signatures/datatype-properties/0/{id}`): per resource and datatype path
    signature, id = SHA-1 of the path signature id followed by the number of
    distinct literals, written `n` when greater than 5. It stores
-   `sig:hasDatatypePathSignature`, and either `sig:hasExactValueCount` (the
+   `sig:containsDatatypePathSignature`, and either `sig:hasExactValueCount` (the
    count, when at most 5) or `sig:hasMinValueCount` (6, when the count is
    greater than 5). Linked with `?i sig:hasDatatypePropertySignature ?prop_sig`.
-4. **Signature** (`sig:Signature`, IRI `sig/signatures/0/{id}`): id = SHA-1 of
+4. **Signature** (`sig:NodeSignature`, IRI `sig/signatures/0/{id}`): id = SHA-1 of
    ```
    {type signature id};{datatype property signature ids, sorted, space-separated}
    ```
-   Linked with `?i sig:hasSignature ?sig`.
+   Linked with `?i sig:hasNodeSignature ?sig`.
 
 Object (non-literal) values are ignored at this level. A resource with neither
 types nor literals (e.g. a class such as `ex:City` above) gets the type
@@ -95,17 +95,17 @@ level-n signature (object links) instead of literals:
    ```
    where `<p1>|<p2>` is the sorted set of properties linking the resource to
    that *same* target. It stores the target's level-n signature
-   (`sig:hasTargetSignature`), each pair
-   (`sig:hasSourceTargetPair [ sig:source ?i ; sig:target ?o ]`), and the
+   (`sig:containsTargetNodeSignature`), each pair
+   (`^sig:hasPathSignature [ sig:source ?i ; sig:target ?o ]`), and the
    properties of a sample pair (`sig:hasMemberProperty`).
 2. **Object property signature** (`sig:ObjectPropertySignature`, IRI
    `sig/signatures/object-properties/{n+1}/{id}`): per resource and object
    path signature, id = SHA-1 of the path signature id followed by the number
    of distinct targets (`n` when greater than 5). It stores
-   `sig:hasObjectPathSignature` and `sig:hasExactValueCount` or
+   `sig:containsObjectPathSignature` and `sig:hasExactValueCount` or
    `sig:hasMinValueCount`, as for literals. Linked with
    `?i sig:hasObjectPropertySignature ?prop_sig`.
-3. **Signature** (`sig:Signature`, IRI `sig/signatures/{n+1}/{id}`): id =
+3. **Signature** (`sig:NodeSignature`, IRI `sig/signatures/{n+1}/{id}`): id =
    SHA-1 of
    ```
    {level-0 signature id};{object property signature ids, sorted, space-separated}
@@ -131,11 +131,11 @@ Everything is written to the named graph
 <sig/levels/1> a sig:SignatureLevel ;
     sig:levelValue 1 .
 
-<sig/signatures/1/{ENCODE_FOR_URI(id)}> a sig:Signature ;
+<sig/signatures/1/{ENCODE_FOR_URI(id)}> a sig:NodeSignature ;
     sig:level <sig/levels/1> ;
     sig:id "{id}" .
 
-ex:alice sig:hasSignature <sig/signatures/1/...> .
+ex:alice sig:hasNodeSignature <sig/signatures/1/...> .
 ```
 
 The intermediate signatures of each level are stored next to it, with the
@@ -148,24 +148,24 @@ ex:alice sig:hasTypeSignature <sig/signatures/types/0/...> ;
 <sig/signatures/types/0/...> a sig:TypeSignature ;
     sig:hasMemberType ex:Person .
 <sig/signatures/datatype-properties/0/...> a sig:DatatypePropertySignature ;
-    sig:hasDatatypePathSignature <sig/signatures/datatype-values/0/...> ;
+    sig:containsDatatypePathSignature <sig/signatures/datatype-values/0/...> ;
     sig:hasExactValueCount 2 .              # or sig:hasMinValueCount 6
 <sig/signatures/datatype-values/0/...> a sig:DatatypePathSignature ;
     sig:hasMemberProperty ex:nick ;
-    sig:hasSourceTargetPair [ sig:source ex:alice ; sig:target "Al"@en ] .
+    ^sig:hasPathSignature [ sig:source ex:alice ; sig:target "Al"@en ] .
 
 # level n >= 1
 ex:alice sig:hasObjectPropertySignature <sig/signatures/object-properties/1/...> .
 <sig/signatures/object-properties/1/...> a sig:ObjectPropertySignature ;
-    sig:hasObjectPathSignature <sig/signatures/object-values/1/...> ;
+    sig:containsObjectPathSignature <sig/signatures/object-values/1/...> ;
     sig:hasExactValueCount 1 .
 <sig/signatures/object-values/1/...> a sig:ObjectPathSignature ;
     sig:hasMemberProperty ex:knows ;
-    sig:hasTargetSignature <sig/signatures/0/...> ;   # ex:bob's level-0 signature
-    sig:hasSourceTargetPair [ sig:source ex:alice ; sig:target ex:bob ] .
+    sig:containsTargetNodeSignature <sig/signatures/0/...> ;   # ex:bob's level-0 signature
+    ^sig:hasPathSignature [ sig:source ex:alice ; sig:target ex:bob ] .
 ```
 
-Only `sig:Signature` nodes are signatures in the sense of the partition;
+Only `sig:NodeSignature` nodes are signatures in the sense of the partition;
 queries that count signatures per level must filter on that type (as
 `queries/convergence.rq` does).
 

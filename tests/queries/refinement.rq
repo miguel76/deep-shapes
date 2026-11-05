@@ -15,15 +15,15 @@ WHERE {
 	GRAPH sigdata:graph {
 		?next_level sig:levelValue ?next_level_value.
 		?next_sig sig:level ?next_level.
-		?x sig:hasSignature ?next_sig.
-		?y sig:hasSignature ?next_sig.
+		?x sig:hasNodeSignature ?next_sig.
+		?y sig:hasNodeSignature ?next_sig.
 		FILTER(STR(?x) < STR(?y))
 		?level sig:levelValue ?level_value.
 		FILTER(?level_value = ?next_level_value - 1)
 		?x_sig sig:level ?level.
 		?y_sig sig:level ?level.
-		?x sig:hasSignature ?x_sig.
-		?y sig:hasSignature ?y_sig.
+		?x sig:hasNodeSignature ?x_sig.
+		?y sig:hasNodeSignature ?y_sig.
 		FILTER(?x_sig != ?y_sig)
 	}
 }

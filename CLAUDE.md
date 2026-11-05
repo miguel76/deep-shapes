@@ -82,7 +82,7 @@ default graph: use quads (N-Quads or TriG), or load triples with
   exponentially on cyclic data.
 - Each level stores intermediate signatures (type, datatype/object path and
   property signatures) with the same `sig:level`. Anything that counts or
-  compares signatures per level must restrict to `a sig:Signature`.
+  compares signatures per level must restrict to `a sig:NodeSignature`.
 - Convergence is detected by signature counts per level, not by ids
   (`queries/convergence.rq`): on cyclic data ids keep changing even when the
   partition is stable.

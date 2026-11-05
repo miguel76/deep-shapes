@@ -12,7 +12,7 @@ PREFIX sigs: <sig/signatures/>
 SELECT ?level_value ?i (COUNT(DISTINCT ?sig) AS ?signatures)
 WHERE {
 	GRAPH sigdata:graph {
-		?i sig:hasSignature ?sig.
+		?i sig:hasNodeSignature ?sig.
 		?sig sig:level ?level.
 		?level sig:levelValue ?level_value.
 	}

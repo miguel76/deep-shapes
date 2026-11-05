@@ -32,7 +32,7 @@ WHERE {
 		WHERE {
 			GRAPH sigdata:graph {
 				?level sig:levelValue ?level_value.
-				?sig a sig:Signature;
+				?sig a sig:NodeSignature;
 					sig:level ?level.
 			}
 		}
@@ -46,7 +46,7 @@ WHERE {
 			WHERE {
 				GRAPH sigdata:graph {
 					?previous_level sig:levelValue ?previous_level_value.
-					?previous_sig a sig:Signature;
+					?previous_sig a sig:NodeSignature;
 						sig:level ?previous_level.
 				}
 			}
