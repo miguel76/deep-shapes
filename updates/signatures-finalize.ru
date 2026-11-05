@@ -8,11 +8,11 @@ PREFIX siglevels: <sig/levels/>
 PREFIX sigs: <sig/signatures/>
 
 # Run once the highest level has converged (it adds no signatures over the
-# previous level, see queries/convergence.rq): the level
-# is marked with `sig:final true`.
+# previous level, see queries/convergence.rq): the level is kept and marked
+# with `sig:final true`, and its object property signatures are linked to the
+# final signatures of their targets.
 #
-# Called by scripts/sig-converge.sh, which checks convergence first. Level 0
-# is never removed.
+# Called by scripts/sig-converge.sh, which checks convergence first.
 
 # 1. Mark the highest level as final.
 INSERT {
@@ -37,6 +37,10 @@ WHERE {
 	FILTER(?level_value = ?last_level_value)
 };
 
+# 2. Object property signatures point to their targets' signatures at the
+# level below (sig:containsTargetNodeSignature). At the final level, which
+# has the same partition as the level below, each of those has exactly one
+# child signature (sig:hasParentSignature): link to it.
 # DELETE {
 # 	GRAPH sigdata:graph {
 # 		?object_path_signature sig:containsTargetNodeSignature ?o_parent_signature

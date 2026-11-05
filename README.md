@@ -41,12 +41,12 @@ What exists today:
 | --- | --- |
 | `updates/signatures-base.ru` | SPARQL update: drops the signature graph and computes level-0 signatures. |
 | `updates/signatures-rec.ru` | SPARQL update: computes signatures for the level after the highest existing one. Run it repeatedly to go deeper. |
-| `updates/signatures-finalize.ru` | SPARQL update: after convergence, removes the redundant highest level and marks the one below it as final. |
+| `updates/signatures-finalize.ru` | SPARQL update: after convergence, marks the highest level as final and links its object property signatures to the final signatures of their targets. |
 | `queries/signatures.rq` | Number of distinct signatures and of signed resources per level. |
 | `queries/convergence.rq` | Signature count per level compared with the previous level; tells when more levels stop being useful, and which level is marked final. |
 | `queries/duplicate-shapes.rq` | Sanity check: resources with more than one level-1 signature (expected: none). |
 | `queries/without-signature.rq` | Triples whose subject has no signature. |
-| `scripts/sig-converge.sh` | Computes levels one after another until the partition converges, then removes the redundant last level. |
+| `scripts/sig-converge.sh` | Computes levels one after another until the partition converges, then marks the last level as final. |
 | `scripts/*.sh` | Wrappers around the Apache Jena command-line tools (see below). |
 | `kg/config/kg-config.ttl` | TDB2 dataset + Fuseki service configuration. |
 | `docs/signatures.md` | Detailed description of the signature format and data model. |
@@ -94,9 +94,12 @@ Run every script from the repository root.
    - It computes level 0 first if there are no signatures yet, and otherwise
      continues from the highest existing level.
    - Convergence is only visible once a level adds no signatures. That level
-     just repeats the previous one's partition, so the script removes it
-     (`updates/signatures-finalize.ru`) and marks the previous level with
-     `sig:final true`. Later runs see the mark and stop immediately.
+     has the same partition as the previous one, so the script stops there
+     and marks it with `sig:final true` (`updates/signatures-finalize.ru`).
+     Its signatures are the candidate shapes: each is linked to the
+     previous-level signature with the same members
+     (`sig:hasParentSignature`), so the targets of its links can be resolved
+     to final signatures too. Later runs see the mark and stop immediately.
    - It exits with status 0 when converged and 2 when `--max-levels` was
      reached first.
    - `TDB_ARGS` overrides the dataset options (default
@@ -137,7 +140,7 @@ check:
 
 - on every graph: one signature per resource and level, each level refining
   the previous one, signature counts increasing up to a final level marked
-  `sig:final`, and a rerun of `sig-converge.sh` doing nothing;
+  `sig:final` (which has as many signatures as the level below), and a rerun of `sig-converge.sh` doing nothing;
 - on structured graphs with a known answer: the exact signature count at
   each level and the final level, and that resources share a final signature
   exactly when they follow the same SHACL shape;

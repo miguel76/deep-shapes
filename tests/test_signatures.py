@@ -121,11 +121,17 @@ class InvariantChecks:
     def test_each_level_refines_the_previous_one(self):
         self.assertEqual(self.query(TESTS / "queries" / "refinement.rq"), [])
 
+    def test_parent_and_final_target_links(self):
+        self.assertEqual(self.query(TESTS / "queries" / "structure-links.rq"), [])
+
     def test_counts_increase_and_last_level_is_final(self):
         rows = self.convergence()
         counts = [int(r["signatures"]) for r in rows]
-        # Every level kept adds signatures; the level that added none was removed.
-        self.assertEqual(counts, sorted(set(counts)), f"counts: {counts}")
+        # Every level adds signatures, except the last (final) one, which has
+        # as many as the level below it.
+        self.assertGreaterEqual(len(counts), 2, f"counts: {counts}")
+        self.assertEqual(counts[:-1], sorted(set(counts[:-1])), f"counts: {counts}")
+        self.assertEqual(counts[-1], counts[-2], f"counts: {counts}")
         self.assertEqual([r["final"] for r in rows], ["false"] * (len(rows) - 1) + ["true"])
 
     def test_rerun_after_convergence_does_nothing(self):

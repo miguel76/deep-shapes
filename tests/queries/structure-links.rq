@@ -1,0 +1,69 @@
+BASE <https://w3id.org/hacid/data/>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
+PREFIX sig: <https://w3id.org/sig/>
+PREFIX sigdata: <sig/>
+PREFIX siglevels: <sig/levels/>
+PREFIX sigs: <sig/signatures/>
+
+# Violations of the links between signatures (empty result = OK):
+# - "parent count": a node signature of level >= 1 without exactly one
+#   sig:hasParentSignature;
+# - "wrong parent": a resource whose signature's parent is not its own
+#   signature at the previous level;
+# - "target count": an object property signature of the final level without
+#   exactly one sig:refersToTargetNodeSignature;
+# - "wrong target": a final target signature that is not at the final level or
+#   whose parent is not the property signature's level-(n-1) target signature.
+
+SELECT ?problem ?x
+WHERE {
+	GRAPH sigdata:graph {
+		{
+			{
+				SELECT ?x (COUNT(DISTINCT ?parent) AS ?parents)
+				WHERE {
+					?x a sig:NodeSignature;
+						sig:level ?level.
+					?level sig:levelValue ?level_value.
+					FILTER(?level_value > 0)
+					OPTIONAL { ?x sig:hasParentSignature ?parent }
+				}
+				GROUP BY ?x
+			}
+			FILTER(?parents != 1)
+			BIND("parent count" AS ?problem)
+		} UNION {
+			?x sig:hasNodeSignature ?sig.
+			?sig sig:hasParentSignature ?parent.
+			FILTER NOT EXISTS { ?x sig:hasNodeSignature ?parent }
+			BIND("wrong parent" AS ?problem)
+		} UNION {
+			{
+				SELECT ?x (COUNT(DISTINCT ?target) AS ?targets)
+				WHERE {
+					?final_level sig:final true.
+					?x a sig:ObjectPropertySignature;
+						sig:level ?final_level.
+					OPTIONAL { ?x sig:refersToTargetNodeSignature ?target }
+				}
+				GROUP BY ?x
+			}
+			FILTER(?targets != 1)
+			BIND("target count" AS ?problem)
+		} UNION {
+			?final_level sig:final true.
+			?x a sig:ObjectPropertySignature;
+				sig:level ?final_level;
+				sig:containsTargetNodeSignature ?previous_target;
+				sig:refersToTargetNodeSignature ?target.
+			FILTER NOT EXISTS {
+				?target sig:level ?final_level;
+					sig:hasParentSignature ?previous_target.
+			}
+			BIND("wrong target" AS ?problem)
+		}
+	}
+}
+ORDER BY ?problem ?x
