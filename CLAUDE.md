@@ -6,9 +6,10 @@ Guidance for Claude Code (and other agents) working in this repository.
 
 SPARQL-only tooling to discover SHACL shapes in an existing knowledge graph.
 Resources get structural "signatures", refined level by level (level n covers
-the n-hop neighbourhood). Shape generation from signatures is planned but not
-implemented yet. Read `README.md` for the aim and `docs/signatures.md` for the
-exact signature format and data model before changing the updates.
+the n-hop neighbourhood); the final level is turned into SHACL shapes. Read
+`README.md` for the aim, `docs/signatures.md` for the exact signature format
+and data model and `docs/shapes.md` for the shapes before changing the
+updates.
 
 ## Layout
 
@@ -17,6 +18,8 @@ exact signature format and data model before changing the updates.
 - `updates/signatures-finalize.ru`: on convergence, marks the highest level
   `sig:final true` and links its object property signatures to the final
   target signatures (`sig:refersToTargetNodeSignature`).
+- `updates/shapes.ru`: SHACL shapes from the final level, into the graph
+  `<shapes/graph>` (dropped by `signatures-base.ru` too).
 - `queries/*.rq`: inspection and sanity-check queries.
 - `scripts/*.sh`: Jena CLI wrappers; run them from the repo root.
 - `tests/`: end-to-end tests (`test_signatures.py`), the synthetic graph
@@ -96,6 +99,9 @@ default graph: use quads (N-Quads or TriG), or load triples with
   partition is stable.
 - Ids must be deterministic for a given structure: keep the `ORDER BY` before
   every `GROUP_CONCAT`.
+- Shape IRIs are built from signature ids, and lists use IRIs, not blank
+  nodes, so that shared shapes are written once and the output is
+  deterministic (snapshot in `tests/expected/people-places-shapes.nt`).
 - The signature graph is part of the default graph (union). Any new pattern
   over the default graph also sees `sig:` triples; filter them out where they
   would distort results.
@@ -108,4 +114,5 @@ default graph: use quads (N-Quads or TriG), or load triples with
 - Commented-out `FILTER NOT EXISTS` blocks (subclass/subproperty pruning) are
   intentional ideas kept for later; don't delete them without asking.
 - When behaviour or the signature format changes, update
-  `docs/signatures.md` in the same commit.
+  `docs/signatures.md` (or `docs/shapes.md` for the shapes) in the same
+  commit.

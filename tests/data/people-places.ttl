@@ -1,0 +1,14 @@
+# Small hand-written graph for the shapes tests (tests/expected/people-places-shapes.nt):
+# ex:name and rdfs:label share literals (companion shapes), ex:nick has two
+# languages and ex:knows targets of two shapes (qualified property shapes),
+# and ex:rome has the same path for a plain and a language-tagged literal.
+@prefix ex: <http://ex.org/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+ex:alice a ex:Person ;
+	ex:name "Alice" ; rdfs:label "Alice" ;
+	ex:nick "Al"@en, "Ali"@it ;
+	ex:livesIn ex:rome ;
+	ex:knows ex:bob, ex:carol .
+ex:bob a ex:Person ; ex:name "Bob" .
+ex:carol a ex:Person ; ex:name "Carol" ; ex:livesIn ex:rome .
+ex:rome a ex:City, ex:Place ; ex:name "Roma", "Roma"@it ; rdfs:label "Roma", "Roma"@it .

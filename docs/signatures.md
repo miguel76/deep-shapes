@@ -95,7 +95,8 @@ signatures written by earlier steps are visible through the union default
 graph.
 
 The update starts with `DROP SILENT GRAPH`, so it always replaces every
-existing signature (all levels).
+existing signature (all levels). It also drops the shapes generated from the
+previous signatures (`<shapes/graph>`, see [shapes.md](shapes.md)).
 
 ## Level n+1: `updates/signatures-rec.ru`
 
@@ -146,7 +147,9 @@ final object property signature to the final signature of its targets:
 ```
 
 The final node signatures, with their object property signatures and these
-links, form a graph of candidate shapes.
+links, form a graph of candidate shapes. `updates/shapes.ru` turns them into
+SHACL shapes and links each final node signature to its shape with
+`sig:hasShape` (see [shapes.md](shapes.md)).
 
 ## Data model
 

@@ -108,6 +108,34 @@ class PipelineTestCase(unittest.TestCase):
     def convergence(cls):
         return cls.query(REPO / "queries" / "convergence.rq")
 
+    @classmethod
+    def construct(cls, path, out):
+        """Run a CONSTRUCT query file and write the result as N-Triples."""
+        result = cls.run_cmd(
+            "tdb2.tdbquery", f"--loc={cls.loc}", "--set=tdb:unionDefaultGraph=true",
+            "--results=nt", "--query", path,
+        )
+        Path(out).write_text(result.stdout)
+        return result.stdout
+
+    @classmethod
+    def shapes(cls):
+        """Generate the shapes (once) and return the path of an N-Triples file
+        with them, each resource being a target of its final shape."""
+        if not getattr(cls, "_shapes_file", None):
+            cls.update("shapes.ru")
+            cls._shapes_file = cls.tmp / "shapes-with-targets.nt"
+            cls.construct(TESTS / "queries" / "shapes-with-targets.rq", cls._shapes_file)
+        return cls._shapes_file
+
+    @classmethod
+    def validate(cls, shapes, data):
+        """Validate data with Jena SHACL; return the report (Turtle)."""
+        result = cls.run_cmd("shacl", "validate", "--shapes", shapes, "--data", data, check=False)
+        if "ValidationReport" not in result.stdout:
+            raise AssertionError(f"shacl validate failed:\n{result.stdout}\n{result.stderr}")
+        return result.stdout
+
 
 class InvariantChecks:
     """Checks that must hold for any graph once sig-converge.sh has run."""
@@ -140,6 +168,10 @@ class InvariantChecks:
         self.assertIn("Already converged", result.stdout)
         self.assertEqual(self.convergence(), before)
 
+    def test_shape_structure(self):
+        self.shapes()
+        self.assertEqual(self.query(TESTS / "queries" / "shape-structure.rq"), [])
+
 
 class LayeredChecks(InvariantChecks):
     """Extra checks for `generate.py layered` graphs, which have a known answer."""
@@ -159,6 +191,14 @@ class LayeredChecks(InvariantChecks):
             "--data", self.data_dir / "data.nt",
         )
         self.assertRegex(result.stdout, r"sh:conforms\s+true")
+
+    def test_data_conforms_to_discovered_shapes(self):
+        report = self.validate(self.shapes(), self.data_dir / "data.nt")
+        self.assertRegex(report, r"sh:conforms\s+true", report)
+
+    def test_discovered_shapes_are_unqualified(self):
+        # Every property is used by a single property signature per node.
+        self.assertNotIn("qualified", self.shapes().read_text())
 
     def test_final_signatures_match_shapes(self):
         """Same SHACL shape <=> same signature at the final level."""
@@ -281,6 +321,57 @@ class SnapshotTest(PipelineTestCase):
             if r["level_value"] == "2":
                 for ref in re.findall(r"\[([^\]]*)\]", r["id"]):
                     self.assertRegex(ref, r"^#[0-9a-f]{40}$", r["id"])
+
+
+class ShapesTest(PipelineTestCase):
+    """Shapes generated from a small graph with shared literals, several
+    languages and link targets of different shapes, so that both qualified
+    and unqualified property shapes occur. Checked against a snapshot, and
+    the data must conform to its own shapes."""
+
+    data = TESTS / "data" / "people-places.ttl"
+    snapshot = TESTS / "expected" / "people-places-shapes.nt"
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.load(cls.data)
+        cls.converge()
+        cls.shapes_file = cls.shapes()
+
+    def test_shapes_match_snapshot(self):
+        out = self.tmp / "shapes.nt"
+        text = "".join(sorted(set(
+            self.construct(REPO / "queries" / "shapes.rq", out).splitlines(keepends=True)
+        )))
+        if os.environ.get("UPDATE_SNAPSHOTS"):
+            self.snapshot.write_text(text)
+            self.skipTest(f"snapshot written to {self.snapshot}")
+        self.assertEqual(text, self.snapshot.read_text())
+
+    def test_shape_structure(self):
+        self.assertEqual(self.query(TESTS / "queries" / "shape-structure.rq"), [])
+
+    def test_both_kinds_of_property_shapes(self):
+        text = self.shapes_file.read_text()
+        for term in ("qualifiedEquals", "qualifiedValueShape", "#equals>", "#node>", "#datatype>"):
+            self.assertIn(term, text)
+
+    def test_data_conforms_to_its_shapes(self):
+        report = self.validate(self.shapes_file, self.data)
+        self.assertRegex(report, r"sh:conforms\s+true", report)
+
+    def test_changed_data_does_not_conform(self):
+        changed = self.tmp / "changed.ttl"
+        changed.write_text(
+            self.data.read_text()
+            .replace('rdfs:label "Alice"', 'rdfs:label "Alicia"')  # breaks sh:equals
+            .replace('"Ali"@it', '"Alo"@en')  # breaks qualified counts
+        )
+        report = self.validate(self.shapes_file, changed)
+        self.assertRegex(report, r"sh:conforms\s+false", report)
+        self.assertIn("Equals", report)
+        self.assertIn("QualifiedValueShape", report)
 
 
 if __name__ == "__main__":

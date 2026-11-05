@@ -29,9 +29,10 @@ spirit to colour refinement (the Weisfeiler–Lehman test) on graphs. Going
 deeper separates resources that look alike locally but differ in their
 surroundings.
 
-The planned next step, not yet implemented, is to turn the signatures into
-SHACL shapes, e.g. one `sh:NodeShape` per signature (or group of signatures),
-with property shapes derived from the signature contents.
+Once the partition stops changing, the signatures of the final level are
+turned into SHACL shapes: one `sh:NodeShape` per signature, with property
+shapes derived from the signature contents (see
+[`docs/shapes.md`](docs/shapes.md)).
 
 ## Current status
 
@@ -42,17 +43,22 @@ What exists today:
 | `updates/signatures-base.ru` | SPARQL update: drops the signature graph and computes level-0 signatures. |
 | `updates/signatures-rec.ru` | SPARQL update: computes signatures for the level after the highest existing one. Run it repeatedly to go deeper. |
 | `updates/signatures-finalize.ru` | SPARQL update: after convergence, marks the highest level as final and links its object property signatures to the final signatures of their targets. |
+| `updates/shapes.ru` | SPARQL update: generates SHACL shapes from the final level (see [`docs/shapes.md`](docs/shapes.md)). |
 | `queries/signatures.rq` | Number of distinct signatures and of signed resources per level. |
 | `queries/convergence.rq` | Signature count per level compared with the previous level; tells when more levels stop being useful, and which level is marked final. |
 | `queries/duplicate-shapes.rq` | Sanity check: resources with more than one level-1 signature (expected: none). |
 | `queries/without-signature.rq` | Triples whose subject has no signature. |
+| `queries/shapes.rq` | The generated shapes. |
 | `scripts/sig-converge.sh` | Computes levels one after another until the partition converges, then marks the last level as final. |
 | `scripts/*.sh` | Wrappers around the Apache Jena command-line tools (see below). |
 | `kg/config/kg-config.ttl` | TDB2 dataset + Fuseki service configuration. |
+| `scripts/shapes.sh` | Generates the shapes and writes them as Turtle. |
 | `docs/signatures.md` | Detailed description of the signature format and data model. |
+| `docs/shapes.md` | How shapes are generated from the signatures, and their limitations. |
 | `tests/` | End-to-end tests and the synthetic graph generator (see [Tests](#tests)). |
 
-Not there yet: shape generation.
+Shape generation is a first version: see the limitations in
+[`docs/shapes.md`](docs/shapes.md).
 
 ## Requirements
 
@@ -104,11 +110,17 @@ Run every script from the repository root.
      reached first.
    - `TDB_ARGS` overrides the dataset options (default
      `--tdb=kg/config/kg-config.ttl`).
-5. Inspect the results:
+5. Generate the SHACL shapes from the final level, written as Turtle
+   (`sh:qualifiedEquals` in them is an extension of SHACL, see
+   [`docs/shapes.md`](docs/shapes.md)):
+   ```sh
+   scripts/shapes.sh shapes.ttl
+   ```
+6. Inspect the results:
    ```sh
    scripts/check.sh
    ```
-6. Optionally, expose the dataset as a SPARQL endpoint
+7. Optionally, expose the dataset as a SPARQL endpoint
    (`http://localhost:3030/shapes/`):
    ```sh
    scripts/serve_kg.sh
@@ -145,6 +157,9 @@ check:
   each level and the final level, and that resources share a final signature
   exactly when they follow the same SHACL shape;
 - `--max-levels` and resuming, and `--restart`;
+- the generated shapes: their structure on every graph; on the structured
+  graphs and on `tests/data/people-places.ttl`, that the data conforms to
+  them (with Jena SHACL), and on the latter a snapshot of the shapes;
 - the exact ids for levels 0–2 on a small hand-written graph
   (`tests/data/people.ttl`) against a snapshot in `tests/expected/`. If the
   id format changes on purpose, regenerate it with `UPDATE_SNAPSHOTS=1` and
