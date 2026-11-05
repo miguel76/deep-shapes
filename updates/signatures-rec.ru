@@ -107,10 +107,12 @@ WHERE {
 	{
 		SELECT
 			?level_value ?level ?i ?base_node_signature ?base_node_signature_id
+			?parent_signature
 			(GROUP_CONCAT(?object_property_signature_id) AS ?obj_signature)
 		WHERE {
 			SELECT
 				?level_value ?level ?i ?base_node_signature ?base_node_signature_id
+				?parent_signature
 				?object_property_signature ?object_property_signature_id
 			WHERE {
 				{
@@ -129,9 +131,12 @@ WHERE {
 
 					?previous_level sig:levelValue ?previous_level_value.
 					FILTER(?previous_level_value = ?level_value - 1)
-					?i sig:hasNodeSignature ?i_parent_signature.
-					?i_parent_signature sig:level ?previous_level;
-						sig:id ?i_parent_signature_id.
+					# The resource's signature at the previous level. Each level
+					# refines the previous one, so all the resources with the
+					# same signature share the same parent signature.
+					?i sig:hasNodeSignature ?parent_signature.
+					?parent_signature a sig:NodeSignature;
+						sig:level ?previous_level.
 
 					OPTIONAL {
 						?i sig:hasObjectPropertySignature ?object_property_signature.
@@ -146,6 +151,7 @@ WHERE {
 		}
 		GROUP BY
 			?level_value ?level ?i ?base_node_signature ?base_node_signature_id
+			?parent_signature
 	}
 
 	BIND(

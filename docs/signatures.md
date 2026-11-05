@@ -32,45 +32,62 @@ signature.
 
 The level-0 signature is built in steps. Each step stores intermediate
 signatures in the signature graph, so that the information needed later to
-build shapes (member types, member properties, value counts) is kept, not only
-the association between resources and their final signature. All ids at this
-level are SHA-1 hashes (hex) of a canonical string.
+build shapes (member types, member properties, datatypes, value counts, link
+targets) is kept, not only the association between resources and their final
+signature. All ids are SHA-1 hashes (hex) of a canonical string.
 
-1. **Type signature** (`sig:TypeSignature`, IRI `sig/signatures/types/0/{id}`):
+The signatures built by this update don't depend on the level: their IRIs
+have no level and they have no `sig:level`. Only the level-0 node signature
+(step 5) belongs to a level.
+
+1. **Type signature** (`sig:TypeSignature`, IRI `sig/signatures/types/{id}`):
    id = SHA-1 of the resource's `rdf:type` values, written `<Type>` and sorted
    (empty string for an untyped resource). Linked with
    `?i sig:hasTypeSignature ?type_sig`. A second step stores the types of a
    sample member: `?type_sig sig:hasMemberType ?type`.
 2. **Datatype path signature** (`sig:DatatypePathSignature`, IRI
-   `sig/signatures/datatype-values/0/{id}`): one per (resource, literal) pair,
-   id = SHA-1 of
-   ```
-   <p1>|<p2> ^^<datatype> @lang
-   ```
-   where `<p1>|<p2>` is the sorted set of properties that link the resource to
-   that *same* literal (usually one; several only when a literal is shared, as
-   with `ex:name` and `rdfs:label` both being `"Alice"` above), and `@lang`
-   appears only for language-tagged literals. Each pair is stored as
-   `?path_sig ^sig:hasPathSignature [ sig:source ?i ; sig:target ?literal ]`,
-   and the properties of a sample pair as `?path_sig sig:hasMemberProperty ?p`.
+   `sig/signatures/datatype-paths/{id}`): one per (resource, literal) pair,
+   id = SHA-1 of `<p1>|<p2>`, the sorted set of properties that link the
+   resource to that *same* literal (usually one; several only when a literal
+   is shared, as with `ex:name` and `rdfs:label` both being `"Alice"` above).
+   Each pair is stored as a `sig:SourceTargetPair` (IRI
+   `sig/source-target-pairs/{hash}`) with `sig:source`, `sig:target` and
+   `sig:hasPathSignature`, and the properties of a sample pair as
+   `?path_sig sig:hasMemberProperty ?p`.
 3. **Datatype property signature** (`sig:DatatypePropertySignature`, IRI
-   `sig/signatures/datatype-properties/0/{id}`): per resource and datatype path
-   signature, id = SHA-1 of the path signature id followed by the number of
-   distinct literals, written `n` when greater than 5. It stores
-   `sig:containsDatatypePathSignature`, and either `sig:hasExactValueCount` (the
-   count, when at most 5) or `sig:hasMinValueCount` (6, when the count is
-   greater than 5). Linked with `?i sig:hasDatatypePropertySignature ?prop_sig`.
-4. **Signature** (`sig:NodeSignature`, IRI `sig/signatures/0/{id}`): id = SHA-1 of
+   `sig/signatures/datatype-properties/{id}`): per resource, datatype path
+   signature, datatype and language tag, id = SHA-1 of
+   ```
+   {path signature id}; ^^<datatype> @lang;{count}
+   ```
+   where ` @lang` appears only for language-tagged literals and `{count}` is
+   the number of distinct literals, written `n` when greater than 5. It
+   stores `sig:containsDatatypePathSignature`, `sig:hasTargetDatatype`,
+   `sig:hasTargetLanguage` (language-tagged literals only), and either
+   `sig:hasExactValueCount` (the count, when at most 5) or
+   `sig:hasMinValueCount` (6, when the count is greater than 5). Linked with
+   `?i sig:hasDatatypePropertySignature ?prop_sig`.
+4. **Base node signature** (`sig:BaseNodeSignature`, IRI
+   `sig/signatures/base-nodes/{id}`): id = SHA-1 of
    ```
    {type signature id};{datatype property signature ids, sorted, space-separated}
    ```
-   Linked with `?i sig:hasNodeSignature ?sig`.
+   It stores `sig:containsTypeSignature` and
+   `sig:containsDatatypePropertySignature`. Linked with
+   `?i sig:hasBaseNodeSignature ?base_sig`.
+5. **Level-0 node signature** (`sig:NodeSignature`, IRI
+   `sig/signatures/nodes/0/{id}`): same id as the base node signature, with
+   `sig:level <sig/levels/0>` and `sig:containsBaseNodeSignature`. Linked with
+   `?i sig:hasNodeSignature ?sig`.
+6. **Object path signature** (`sig:ObjectPathSignature`, IRI
+   `sig/signatures/object-paths/{id}`): as the datatype path signature, but
+   for (resource, non-literal target) pairs, with their own
+   `sig:SourceTargetPair`s. It is used from level 1 on.
 
-Object (non-literal) values are ignored at this level. A resource with neither
-types nor literals (e.g. a class such as `ex:City` above) gets the type
-signature of the empty string and no datatype property signatures; all such
-resources share one level-0 signature, and keep it at every level if they
-have no outgoing edges.
+Object (non-literal) values are not part of the level-0 signature. A
+resource with neither types nor literals (e.g. a class such as `ex:City`
+above) gets the type signature of the empty string and no datatype property
+signatures; all such resources share one level-0 signature.
 
 The data patterns read only graphs other than the signature graph
 (`GRAPH ?g { ... } FILTER(?g != sigdata:graph)`), since the intermediate
@@ -83,42 +100,53 @@ existing signature (all levels).
 ## Level n+1: `updates/signatures-rec.ru`
 
 The update finds the highest existing level `n`, adds the level `n+1`
-(`sig:SignatureLevel`), and then builds its signatures in the same steps as
-level 0, but over outgoing non-`rdf:type` links to resources that have a
-level-n signature (object links) instead of literals:
+(`sig:SignatureLevel`), and then builds its signatures over the object path
+signatures (computed once by `signatures-base.ru`) and the targets' level-n
+signatures:
 
-1. **Object path signature** (`sig:ObjectPathSignature`, IRI
-   `sig/signatures/object-values/{n+1}/{id}`): one per (resource, target)
-   pair, id = SHA-1 of
+1. **Object property signature** (`sig:ObjectPropertySignature`, IRI
+   `sig/signatures/object-properties/{n+1}/{id}`): per resource, object path
+   signature and target's level-n signature, id = SHA-1 of
    ```
-   <p1>|<p2> [<target's level-n signature id>]
+   {object path signature id};{target's level-n signature id};{count}
    ```
-   where `<p1>|<p2>` is the sorted set of properties linking the resource to
-   that *same* target. It stores the target's level-n signature
-   (`sig:containsTargetNodeSignature`), each pair
-   (`^sig:hasPathSignature [ sig:source ?i ; sig:target ?o ]`), and the
-   properties of a sample pair (`sig:hasMemberProperty`).
-2. **Object property signature** (`sig:ObjectPropertySignature`, IRI
-   `sig/signatures/object-properties/{n+1}/{id}`): per resource and object
-   path signature, id = SHA-1 of the path signature id followed by the number
-   of distinct targets (`n` when greater than 5). It stores
-   `sig:containsObjectPathSignature` and `sig:hasExactValueCount` or
-   `sig:hasMinValueCount`, as for literals. Linked with
-   `?i sig:hasObjectPropertySignature ?prop_sig`.
-3. **Signature** (`sig:NodeSignature`, IRI `sig/signatures/{n+1}/{id}`): id =
-   SHA-1 of
+   where `{count}` is the number of distinct targets (`n` when greater than
+   5). It stores `sig:level`, `sig:containsObjectPathSignature`,
+   `sig:containsTargetNodeSignature` (the targets' level-n node signature)
+   and `sig:hasExactValueCount` or `sig:hasMinValueCount`, as for literals.
+   Linked with `?i sig:hasObjectPropertySignature ?prop_sig`.
+2. **Node signature** (`sig:NodeSignature`, IRI
+   `sig/signatures/nodes/{n+1}/{id}`): id = SHA-1 of
    ```
-   {level-0 signature id};{object property signature ids, sorted, space-separated}
+   {base node signature id};{object property signature ids, sorted, space-separated}
    ```
-   for every resource with a level-0 signature. A resource without object
-   links gets SHA-1 of `{level-0 id};`: a different id from its level-0 one,
-   but the same one at every level.
+   for every resource with a base node signature. It stores `sig:level`,
+   `sig:containsBaseNodeSignature`, `sig:containsObjectPropertySignature` and
+   `sig:hasParentSignature`, the level-n signature of the same resources
+   (unique, since each level refines the previous one, see below). A resource
+   without object links gets SHA-1 of `{base id};`: a different id from its
+   level-0 one, but the same one at every level.
 
 Since every id is a SHA-1 hash, an id embeds its targets' previous-level ids
 without growing with the level, also on cyclic data. Ids are not readable on
 their own: the structure is in the intermediate signatures.
 
 Incoming links are not part of the signature.
+
+## Finalization: `updates/signatures-finalize.ru`
+
+Run by `scripts/sig-converge.sh` at the first level that adds no signatures
+(see below). It marks that level `sig:final true` and keeps it: it has the
+same partition as the level below, so each level-(n−1) signature has exactly
+one child (`sig:hasParentSignature`) at the final level n. This links every
+final object property signature to the final signature of its targets:
+
+```turtle
+?prop_sig sig:refersToTargetNodeSignature ?final_target_sig .
+```
+
+The final node signatures, with their object property signatures and these
+links, form a graph of candidate shapes.
 
 ## Data model
 
@@ -129,58 +157,63 @@ Everything is written to the named graph
 
 ```turtle
 <sig/levels/1> a sig:SignatureLevel ;
-    sig:levelValue 1 .
+    sig:levelValue 1 .                      # sig:final true on the final level
 
-<sig/signatures/1/{ENCODE_FOR_URI(id)}> a sig:NodeSignature ;
+<sig/signatures/nodes/1/{ENCODE_FOR_URI(id)}> a sig:NodeSignature ;
     sig:level <sig/levels/1> ;
-    sig:id "{id}" .
+    sig:id "{id}" ;
+    sig:containsBaseNodeSignature <sig/signatures/base-nodes/...> ;
+    sig:containsObjectPropertySignature <sig/signatures/object-properties/1/...> ;
+    sig:hasParentSignature <sig/signatures/nodes/0/...> .
 
-ex:alice sig:hasNodeSignature <sig/signatures/1/...> .
+ex:alice sig:hasNodeSignature <sig/signatures/nodes/1/...> .
 ```
 
-The intermediate signatures of each level are stored next to it, with the
-same `sig:level` and `sig:id`:
+The intermediate signatures (every one also has `sig:id`):
 
 ```turtle
-# level 0
-ex:alice sig:hasTypeSignature <sig/signatures/types/0/...> ;
-    sig:hasDatatypePropertySignature <sig/signatures/datatype-properties/0/...> .
-<sig/signatures/types/0/...> a sig:TypeSignature ;
+# level-independent (signatures-base.ru)
+ex:alice sig:hasTypeSignature <sig/signatures/types/...> ;
+    sig:hasDatatypePropertySignature <sig/signatures/datatype-properties/...> ;
+    sig:hasBaseNodeSignature <sig/signatures/base-nodes/...> .
+<sig/signatures/types/...> a sig:TypeSignature ;
     sig:hasMemberType ex:Person .
-<sig/signatures/datatype-properties/0/...> a sig:DatatypePropertySignature ;
-    sig:containsDatatypePathSignature <sig/signatures/datatype-values/0/...> ;
+<sig/signatures/base-nodes/...> a sig:BaseNodeSignature ;
+    sig:containsTypeSignature <sig/signatures/types/...> ;
+    sig:containsDatatypePropertySignature <sig/signatures/datatype-properties/...> .
+<sig/signatures/datatype-properties/...> a sig:DatatypePropertySignature ;
+    sig:containsDatatypePathSignature <sig/signatures/datatype-paths/...> ;
+    sig:hasTargetDatatype rdf:langString ;
+    sig:hasTargetLanguage "en" ;
     sig:hasExactValueCount 2 .              # or sig:hasMinValueCount 6
-<sig/signatures/datatype-values/0/...> a sig:DatatypePathSignature ;
-    sig:hasMemberProperty ex:nick ;
-    ^sig:hasPathSignature [ sig:source ex:alice ; sig:target "Al"@en ] .
+<sig/signatures/datatype-paths/...> a sig:DatatypePathSignature ;
+    sig:hasMemberProperty ex:nick .
+<sig/source-target-pairs/...> a sig:SourceTargetPair ;
+    sig:source ex:alice ; sig:target "Al"@en ;
+    sig:hasPathSignature <sig/signatures/datatype-paths/...> .
+<sig/signatures/object-paths/...> a sig:ObjectPathSignature ;
+    sig:hasMemberProperty ex:knows .
+<sig/source-target-pairs/...> a sig:SourceTargetPair ;
+    sig:source ex:alice ; sig:target ex:bob ;
+    sig:hasPathSignature <sig/signatures/object-paths/...> .
 
-# level n >= 1
+# level n >= 1 (signatures-rec.ru)
 ex:alice sig:hasObjectPropertySignature <sig/signatures/object-properties/1/...> .
 <sig/signatures/object-properties/1/...> a sig:ObjectPropertySignature ;
-    sig:containsObjectPathSignature <sig/signatures/object-values/1/...> ;
+    sig:level <sig/levels/1> ;
+    sig:containsObjectPathSignature <sig/signatures/object-paths/...> ;
+    sig:containsTargetNodeSignature <sig/signatures/nodes/0/...> ;   # ex:bob's level-0 signature
     sig:hasExactValueCount 1 .
-<sig/signatures/object-values/1/...> a sig:ObjectPathSignature ;
-    sig:hasMemberProperty ex:knows ;
-    sig:containsTargetNodeSignature <sig/signatures/0/...> ;   # ex:bob's level-0 signature
-    ^sig:hasPathSignature [ sig:source ex:alice ; sig:target ex:bob ] .
 ```
 
 Only `sig:NodeSignature` nodes are signatures in the sense of the partition;
 queries that count signatures per level must filter on that type (as
 `queries/convergence.rq` does).
 
-Once the levels have converged, `scripts/sig-converge.sh` (via
-`updates/signatures-finalize.ru`) removes the redundant highest level, with
-its intermediate signatures, and marks the last level kept:
-
-```turtle
-<sig/levels/8> sig:final true .
-```
-
-The level is part of the signature IRI (`sig/signatures/{level}/...`). This is
-required: the same id string can occur at several levels (see above), and a
-signature node shared across levels would have several `sig:level` values,
-making resources appear to have more than one signature per level.
+The level is part of the node signature IRI (`sig/signatures/nodes/{level}/...`).
+This is required: the same id string can occur at several levels (see above),
+and a signature node shared across levels would have several `sig:level`
+values, making resources appear to have more than one signature per level.
 
 Expected invariant: **every signed resource has exactly one signature per
 level.** `queries/duplicate-shapes.rq` checks this for level 1.
@@ -216,9 +249,8 @@ P(n) coarser than it would be with exact counts.
 
 The argument assumes the ids are unambiguous, i.e. two different structures
 never produce the same id. The strings that get hashed are unambiguous because
-IRIs are written between `<` and `>`, which cannot occur inside an IRI, the
-target reference is wrapped in `[`…`]`, and the other parts are fixed-length
-hashes or counts. It also assumes SHA-1 has no collisions among the ids
+IRIs are written between `<` and `>`, which cannot occur inside an IRI, and
+the other parts are fixed-length hashes or counts, separated by `;`. It also assumes SHA-1 has no collisions among the ids
 computed, which is safe in practice for accidental collisions.
 
 ### Convergence
@@ -244,11 +276,13 @@ signature **counts** between levels, not ids: `queries/convergence.rq` does
 this, reporting `converged = true` at the first level that adds no
 signatures. Since ids are hashes, their length is fixed either way.
 
-That first level that adds nothing is redundant: it repeats the previous
-level's partition under new names. `scripts/sig-converge.sh` computes levels
-until it appears, then removes it and marks the previous level with
-`sig:final true` (`final = true` in `queries/convergence.rq`), so the
-highest level kept is the converged one, and later runs don't recompute it.
+That first level that adds nothing repeats the previous level's partition
+under new names. `scripts/sig-converge.sh` computes levels until it appears,
+then keeps it as the final level and marks it with `sig:final true`
+(`final = true` in `queries/convergence.rq`), so later runs don't recompute
+it. Keeping it costs one level, but lets `sig:hasParentSignature` map the
+targets of its object property signatures (level-n−1 signatures) to final
+signatures (see Finalization above).
 
 ### Empirical check
 
@@ -262,7 +296,8 @@ families of trees of depth D, level n has
 1 (classes, no types or literals) + F (leaves) + F·min(n, D) + (1 if n < D else 0)
 ```
 
-signatures, so the partition is final at level D (level D − 1 when F = 1).
+signatures, so the partition stops changing at level D (level D − 1 when
+F = 1), and the final level is D + 1 (D when F = 1).
 
 Before the test suite, the properties were checked by hand on two graphs:
 

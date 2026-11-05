@@ -6,9 +6,9 @@
 # Usage: scripts/sig-converge.sh [--restart] [--max-levels N]
 #
 # Starts from level 0 if there are no signatures yet; otherwise continues from
-# the highest existing level. On convergence, the level that confirmed it is
-# removed (it only repeats the previous partition) and the level below is
-# marked final, so later runs do nothing.
+# the highest existing level. On convergence, the level that confirmed it (same
+# partition as the level below) is kept and marked final, so later runs do
+# nothing.
 #
 #   --restart       discard all existing signatures and start again from
 #                   level 0
@@ -84,10 +84,9 @@ while true; do
 	echo "Level $level: $signatures signatures ($new_signatures new)"
 
 	if [ "$converged" = "true" ]; then
-		echo "Level $level adds no signatures: removing it and marking level" \
-			"$((level - 1)) as final..."
+		echo "Level $level adds no signatures: marking it as final..."
 		update updates/signatures-finalize.ru
-		echo "Converged: level $((level - 1)) is final."
+		echo "Converged: level $level is final."
 		exit 0
 	fi
 	if [ -n "$max_levels" ] && [ "$computed" -ge "$max_levels" ]; then

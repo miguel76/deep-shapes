@@ -16,8 +16,8 @@ PREFIX sigs: <sig/signatures/>
 # convergence.
 #
 # ?final is true for a level marked `sig:final true` by
-# updates/signatures-finalize.ru (run by scripts/sig-converge.sh), which
-# removes the redundant converged level and marks the one below it.
+# updates/signatures-finalize.ru (run by scripts/sig-converge.sh): the first
+# level with ?converged true, kept as the final one.
 
 SELECT
 	?level_value

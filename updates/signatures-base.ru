@@ -144,7 +144,7 @@ INSERT {
 			sig:id ?datatype_property_signature_id;
 			sig:containsDatatypePathSignature ?datatype_path_signature;
 			sig:hasTargetDatatype ?o_type;
-			sig:hasTargetLanguage ?o_lang;
+			sig:hasTargetLanguage ?o_lang_if_any;
 			sig:hasExactValueCount ?exact_datatype_value_count;
 			sig:hasMinValueCount ?min_datatype_value_count.
 		?i sig:hasDatatypePropertySignature ?datatype_property_signature
@@ -154,6 +154,7 @@ WHERE {
 	{
 		SELECT
 			?i ?datatype_path_signature ?datatype_path_signature_id
+			?o_type ?o_lang
 			(COUNT(DISTINCT ?o) AS ?datatype_value_count)
 		WHERE {
 			GRAPH sigdata:graph {
@@ -164,13 +165,17 @@ WHERE {
 						sig:target ?o
 					].
 			}
+			# The path signature has only the properties: the datatype and
+			# language of the literals are part of the property signature.
+			BIND(DATATYPE(?o) AS ?o_type)
+			BIND(LANG(?o) AS ?o_lang)
 		}
 		GROUP BY
 			?i ?datatype_path_signature ?datatype_path_signature_id
+			?o_type ?o_lang
 	}
-	BIND(DATATYPE(?o) AS ?o_type)
-	BIND(LANG(?o) AS ?o_lang)
-	BIND(CONCAT(' ^^<', STR(?o_type), '>', IF(?o_lang, CONCAT(' @', STR(?o_lang)), '')) AS ?o_signature_str)
+	BIND(CONCAT(' ^^<', STR(?o_type), '>', IF(?o_lang != '', CONCAT(' @', ?o_lang), '')) AS ?o_signature_str)
+	BIND(IF(?o_lang != '', ?o_lang, ?undef) AS ?o_lang_if_any)
 	VALUES ?count_limit {5}
 	VALUES ?undef {UNDEF}
 	BIND(IF(?datatype_value_count > ?count_limit, ?undef, ?datatype_value_count) AS ?exact_datatype_value_count)
@@ -273,13 +278,12 @@ WHERE {
 			SELECT ?i ?o ?p
 			WHERE {
 				GRAPH ?g { ?i ?p ?o }
-				FILTER(?g != sigdata:graph && ?p != rdf:type)
+				FILTER(?g != sigdata:graph && ?p != rdf:type && !isLITERAL(?o))
 			}
 			ORDER BY ?i ?o ?p
 		}
 		GROUP BY ?i ?o
 	}
-	# Target signature ids are SHA-1 hashes, so ids don't grow with the level.
 	BIND(SHA1(?link_signature_str) AS ?object_path_signature_id)
 	BIND(IRI(CONCAT(STR(sigs:), 'object-paths/', ENCODE_FOR_URI(?object_path_signature_id))) AS ?object_path_signature)
 	BIND(IRI(CONCAT(STR(stpairs:), SHA1(CONCAT(STR(?i), ' "', STR(?o))))) AS ?source_target_pair)

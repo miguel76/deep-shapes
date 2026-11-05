@@ -87,9 +87,14 @@ def layered_expected_counts(families, depth, max_level):
 
 
 def layered_final_level(counts):
-    """First level n whose successor adds no signatures."""
-    for n in range(len(counts) - 1):
-        if counts[n + 1] == counts[n]:
+    """First level n that adds no signatures over level n - 1.
+
+    sig-converge.sh keeps that level and marks it final: its signatures
+    have the same partition as the level below, and each one is linked to
+    the corresponding signature of the level below with sig:hasParentSignature.
+    """
+    for n in range(1, len(counts)):
+        if counts[n] == counts[n - 1]:
             return n
     raise ValueError("counts did not converge; extend max_level")
 

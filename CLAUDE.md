@@ -14,8 +14,9 @@ exact signature format and data model before changing the updates.
 
 - `updates/signatures-base.ru`: level-0 signatures (drops the signature graph first).
 - `updates/signatures-rec.ru`: next level after the highest existing one.
-- `updates/signatures-finalize.ru`: on convergence, removes the redundant
-  highest level and marks the one below `sig:final true`.
+- `updates/signatures-finalize.ru`: on convergence, marks the highest level
+  `sig:final true` and links its object property signatures to the final
+  target signatures (`sig:refersToTargetNodeSignature`).
 - `queries/*.rq`: inspection and sanity-check queries.
 - `scripts/*.sh`: Jena CLI wrappers; run them from the repo root.
 - `tests/`: end-to-end tests (`test_signatures.py`), the synthetic graph
@@ -73,16 +74,23 @@ default graph: use quads (N-Quads or TriG), or load triples with
 - Every signed resource has exactly one signature per level. Check with a
   `GROUP BY ?level ?i HAVING (COUNT(*) > 1)` query over the signature graph
   after running at least two levels.
-- Signature IRIs include the level: `sig/signatures/{level}/{ENCODE_FOR_URI(id)}`.
+- Node signature IRIs include the level: `sig/signatures/nodes/{level}/{ENCODE_FOR_URI(id)}`
+  (object property signatures too).
   The same id string can legitimately appear at several levels (a resource with
   no object links keeps the same id at every level from 1 on), so dropping the
   level from the IRI reintroduces duplicate signatures.
 - Every id is a SHA-1 hash, and `signatures-rec.ru` embeds the targets'
   previous-level ids (hashes). Embedding unhashed ids makes ids grow
   exponentially on cyclic data.
-- Each level stores intermediate signatures (type, datatype/object path and
-  property signatures) with the same `sig:level`. Anything that counts or
-  compares signatures per level must restrict to `a sig:NodeSignature`.
+- Type, datatype path/property, base node and object path signatures are
+  level-independent (no `sig:level`, no level in the IRI). Each level from 1
+  on stores object property signatures with the same `sig:level` as its node
+  signatures. Anything that counts or compares signatures per level must
+  restrict to `a sig:NodeSignature`.
+- Each node signature from level 1 on has `sig:hasParentSignature` to the
+  previous-level signature of the same resources; the converged level is kept
+  as the final one (not deleted), so the finalize step can resolve
+  `sig:containsTargetNodeSignature` to final signatures through it.
 - Convergence is detected by signature counts per level, not by ids
   (`queries/convergence.rq`): on cyclic data ids keep changing even when the
   partition is stable.
