@@ -1,0 +1,30 @@
+BASE <https://w3id.org/hacid/data/>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
+PREFIX sh: <http://www.w3.org/ns/shacl#>
+PREFIX sig: <https://w3id.org/sig/>
+PREFIX sigdata: <sig/>
+PREFIX siglevels: <sig/levels/>
+PREFIX sigs: <sig/signatures/>
+PREFIX shapedata: <shapes/>
+
+# The generated shapes, with every signed resource as a target node of the
+# shape of its final signature, to validate the data against its own shapes.
+
+CONSTRUCT {
+	?s ?p ?o.
+	?node_shape sh:targetNode ?i.
+}
+WHERE {
+	{
+		GRAPH shapedata:graph { ?s ?p ?o }
+	} UNION {
+		GRAPH sigdata:graph {
+			?final_level sig:final true.
+			?i sig:hasNodeSignature ?node_signature.
+			?node_signature sig:level ?final_level;
+				sig:hasShape ?node_shape.
+		}
+	}
+}

@@ -10,6 +10,10 @@ PREFIX stpairs: <sig/source-target-pairs/>
 
 DROP SILENT GRAPH sigdata:graph;
 
+# Shapes generated from the old signatures (updates/shapes.ru) are stale, and
+# would otherwise be signed as data.
+DROP SILENT GRAPH <shapes/graph>;
+
 INSERT DATA {
 	GRAPH sigdata:graph {
 		siglevels:0 a sig:SignatureLevel;

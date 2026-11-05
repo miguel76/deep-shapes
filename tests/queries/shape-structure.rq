@@ -1,0 +1,137 @@
+BASE <https://w3id.org/hacid/data/>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
+PREFIX sh: <http://www.w3.org/ns/shacl#>
+PREFIX sig: <https://w3id.org/sig/>
+PREFIX sigdata: <sig/>
+PREFIX siglevels: <sig/levels/>
+PREFIX sigs: <sig/signatures/>
+PREFIX shapedata: <shapes/>
+
+# Violations of the expected structure of the generated shapes (empty result
+# = OK):
+# - "shape count": a final node signature without exactly one shape, or a
+#   shape of a non-final signature;
+# - "property shape count": a node shape whose number of main property shapes
+#   (those without sh:equals/sh:qualifiedEquals) differs from the number of
+#   property signatures of its node signature;
+# - "all property shape count": a node shape whose number of property shapes
+#   (main and companions) differs from the number of (property signature,
+#   property of its path) pairs of its node signature;
+# - "type shape count": a node shape without exactly one property shape on
+#   rdf:type;
+# - "mixed qualification": a property shape with both qualified and
+#   unqualified constraints.
+
+SELECT ?problem ?x
+WHERE {
+	{
+		{
+			SELECT ?x (COUNT(DISTINCT ?shape) AS ?shapes)
+			WHERE {
+				GRAPH sigdata:graph {
+					?final_level sig:final true.
+					?x a sig:NodeSignature;
+						sig:level ?final_level.
+					OPTIONAL { ?x sig:hasShape ?shape }
+				}
+			}
+			GROUP BY ?x
+		}
+		FILTER(?shapes != 1)
+		BIND("shape count" AS ?problem)
+	} UNION {
+		GRAPH sigdata:graph {
+			?x sig:hasShape ?shape.
+			FILTER NOT EXISTS { ?x sig:level/sig:final true }
+		}
+		BIND("shape count" AS ?problem)
+	} UNION {
+		{
+			SELECT ?x (COUNT(DISTINCT ?property_signature) AS ?expected)
+			WHERE {
+				GRAPH sigdata:graph {
+					?x sig:hasShape ?shape.
+					OPTIONAL {
+						?x sig:containsBaseNodeSignature/sig:containsDatatypePropertySignature
+							|sig:containsObjectPropertySignature ?property_signature
+					}
+				}
+			}
+			GROUP BY ?x
+		}
+		{
+			SELECT ?x (COUNT(DISTINCT ?property_shape) AS ?actual)
+			WHERE {
+				GRAPH sigdata:graph { ?x sig:hasShape ?shape }
+				OPTIONAL {
+					GRAPH shapedata:graph {
+						?shape sh:property ?property_shape.
+						FILTER NOT EXISTS { ?property_shape sh:equals|sh:qualifiedEquals ?main }
+						FILTER NOT EXISTS { ?property_shape sh:path rdf:type }
+					}
+				}
+			}
+			GROUP BY ?x
+		}
+		FILTER(?expected != ?actual)
+		BIND("property shape count" AS ?problem)
+	} UNION {
+		{
+			SELECT ?x (COUNT(*) AS ?expected)
+			WHERE {
+				{
+					SELECT DISTINCT ?x ?property_signature ?property
+					WHERE {
+						GRAPH sigdata:graph {
+							?x sig:hasShape ?shape.
+							?x sig:containsBaseNodeSignature/sig:containsDatatypePropertySignature
+								|sig:containsObjectPropertySignature ?property_signature.
+							?property_signature sig:containsDatatypePathSignature
+								|sig:containsObjectPathSignature ?path_signature.
+							?path_signature sig:hasMemberProperty ?property.
+						}
+					}
+				}
+			}
+			GROUP BY ?x
+		}
+		{
+			SELECT ?x (COUNT(DISTINCT ?property_shape) AS ?actual)
+			WHERE {
+				GRAPH sigdata:graph { ?x sig:hasShape ?shape }
+				GRAPH shapedata:graph {
+					?shape sh:property ?property_shape.
+					FILTER NOT EXISTS { ?property_shape sh:path rdf:type }
+				}
+			}
+			GROUP BY ?x
+		}
+		FILTER(?expected != ?actual)
+		BIND("all property shape count" AS ?problem)
+	} UNION {
+		{
+			SELECT ?x (COUNT(DISTINCT ?type_shape) AS ?type_shapes)
+			WHERE {
+				GRAPH sigdata:graph { ?x sig:hasShape ?shape }
+				OPTIONAL {
+					GRAPH shapedata:graph {
+						?shape sh:property ?type_shape.
+						?type_shape sh:path rdf:type.
+					}
+				}
+			}
+			GROUP BY ?x
+		}
+		FILTER(?type_shapes != 1)
+		BIND("type shape count" AS ?problem)
+	} UNION {
+		GRAPH shapedata:graph {
+			?x sh:qualifiedValueShape ?value_shape.
+			?x sh:datatype|sh:node|sh:minCount|sh:maxCount|sh:equals ?constraint.
+		}
+		BIND("mixed qualification" AS ?problem)
+	}
+}
+ORDER BY ?problem ?x
