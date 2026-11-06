@@ -18,10 +18,14 @@ knowledge graph, using only SPARQL. The idea is to give each resource a
 level by level:
 
 - **Level 0** describes the resource by itself: its types and the
-  datatype/language of its literal values, with their cardinalities.
+  properties and datatype/language of its literal values.
 - **Level n+1** adds, for each outgoing link, the **level-n signature** of the
   linked resource. Level n therefore describes the resource's neighbourhood up
   to n hops away.
+
+Cardinalities are not part of the signatures: resources that differ only by
+how many values they have for some properties share a signature, and each of
+its properties records the interval (min/max count) of its members.
 
 Resources with the same signature at a given level have the same structure up
 to that depth, so they are candidates for the same shape. This is similar in
@@ -154,8 +158,9 @@ check:
   the previous one, signature counts increasing up to a final level marked
   `sig:final` (which has as many signatures as the level below), and a rerun of `sig-converge.sh` doing nothing;
 - on structured graphs with a known answer: the exact signature count at
-  each level and the final level, and that resources share a final signature
-  exactly when they follow the same SHACL shape;
+  each level and the final level, that resources share a final signature
+  exactly when they follow the same SHACL shape, and that its value count
+  intervals are those of the shape;
 - `--max-levels` and resuming, and `--restart`;
 - the generated shapes: their structure on every graph; on the structured
   graphs and on `tests/data/people-places.ttl`, that the data conforms to
@@ -176,13 +181,15 @@ python3 tests/generate.py random --nodes 10000 --max-degree 9 --seed 1 --out /tm
 ```
 
 - **`layered`**: for each family, `--copies` complete trees of depth `--depth`
-  and fan-out `--fanout`. Leaves differ by family, and internal nodes look
+  and fan-out `--fanout` (or a random fan-out between `--fanout` and
+  `--max-fanout`, so that nodes of a shape have different numbers of
+  children). Leaves differ by family, and internal nodes look
   alike until their leaves are within reach, so `--depth` sets how many
   levels are needed to tell all nodes apart. Besides `data.nt`, it writes
   `shapes.ttl`, the SHACL shapes the data follows (one per family and node
   height, the shapes a complete discovery pipeline should find), and
   `expected.json`, with the expected signature counts per level, the final
-  level, and the nodes of each shape.
+  level, the nodes of each shape and its value count intervals.
 - **`random`**: an unstructured graph with cycles and link counts above the
   cap of 5. Only the general properties can be checked on it.
 

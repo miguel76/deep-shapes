@@ -1,0 +1,32 @@
+BASE <https://w3id.org/hacid/data/>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
+PREFIX sig: <https://w3id.org/sig/>
+PREFIX sigdata: <sig/>
+PREFIX siglevels: <sig/levels/>
+PREFIX sigs: <sig/signatures/>
+
+# Value count intervals of each resource's final signature: one row per
+# resource, property signature (datatype ones through the base node
+# signature) and member property. ?max is unbound when there is no maximum.
+
+SELECT ?i ?p ?min ?max
+WHERE {
+	GRAPH sigdata:graph {
+		?final_level sig:final true.
+		?sig a sig:NodeSignature;
+			sig:level ?final_level.
+		?i sig:hasNodeSignature ?sig.
+		{
+			?sig sig:containsBaseNodeSignature/sig:containsDatatypePropertySignature ?prop.
+			?prop sig:containsDatatypePathSignature/sig:hasMemberProperty ?p.
+		} UNION {
+			?sig sig:containsObjectPropertySignature ?prop.
+			?prop sig:containsObjectPathSignature/sig:hasMemberProperty ?p.
+		}
+		?prop sig:hasMinValueCount ?min.
+		OPTIONAL { ?prop sig:hasMaxValueCount ?max }
+	}
+}
+ORDER BY ?i ?p ?min ?max

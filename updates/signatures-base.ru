@@ -142,54 +142,11 @@ WHERE {
 	# }
 };
 
-INSERT {
-	GRAPH sigdata:graph {
-		?datatype_property_signature a sig:DatatypePropertySignature;
-			sig:id ?datatype_property_signature_id;
-			sig:containsDatatypePathSignature ?datatype_path_signature;
-			sig:hasTargetDatatype ?o_type;
-			sig:hasTargetLanguage ?o_lang_if_any;
-			sig:hasExactValueCount ?exact_datatype_value_count;
-			sig:hasMinValueCount ?min_datatype_value_count.
-		?i sig:hasDatatypePropertySignature ?datatype_property_signature
-	}
-}
-WHERE {
-	{
-		SELECT
-			?i ?datatype_path_signature ?datatype_path_signature_id
-			?o_type ?o_lang
-			(COUNT(DISTINCT ?o) AS ?datatype_value_count)
-		WHERE {
-			GRAPH sigdata:graph {
-				?datatype_path_signature a sig:DatatypePathSignature;
-					sig:id ?datatype_path_signature_id;
-					^sig:hasPathSignature [
-						sig:source ?i;
-						sig:target ?o
-					].
-			}
-			# The path signature has only the properties: the datatype and
-			# language of the literals are part of the property signature.
-			BIND(DATATYPE(?o) AS ?o_type)
-			BIND(LANG(?o) AS ?o_lang)
-		}
-		GROUP BY
-			?i ?datatype_path_signature ?datatype_path_signature_id
-			?o_type ?o_lang
-	}
-	BIND(CONCAT(' ^^<', STR(?o_type), '>', IF(?o_lang != '', CONCAT(' @', ?o_lang), '')) AS ?o_signature_str)
-	BIND(IF(?o_lang != '', ?o_lang, ?undef) AS ?o_lang_if_any)
-	VALUES ?count_limit {5}
-	VALUES ?undef {UNDEF}
-	BIND(IF(?datatype_value_count > ?count_limit, ?undef, ?datatype_value_count) AS ?exact_datatype_value_count)
-	BIND(IF(?datatype_value_count > ?count_limit, ?count_limit + 1, ?undef) AS ?min_datatype_value_count)
-	BIND(IF(?datatype_value_count > ?count_limit, 'n', STR(?datatype_value_count)) AS ?datatype_value_count_str)
-	BIND(SHA1(CONCAT(?datatype_path_signature_id, ';', ?o_signature_str, ';', ?datatype_value_count_str)) AS ?datatype_property_signature_id)
-	BIND(IRI(CONCAT(STR(sigs:), 'datatype-properties/', ENCODE_FOR_URI(?datatype_property_signature_id))) AS ?datatype_property_signature)
-};
-
-
+# Base node signature: the type signature and the set of datatype property
+# keys of the resource. A key is a datatype path signature with the datatype
+# and language of the literals (no count): resources that differ only by how
+# many literals they have for some keys get the same base node signature, and
+# the counts are merged into intervals in the next step.
 INSERT {
 	GRAPH sigdata:graph {
 		?base_node_signature a sig:BaseNodeSignature;
@@ -207,24 +164,28 @@ WHERE {
 	{
 		SELECT
 			?i ?i_type_signature ?i_type_signature_id
-			(GROUP_CONCAT(?datatype_property_signature_id) AS ?dt_signature)
+			(GROUP_CONCAT(?datatype_key_id) AS ?dt_signature)
 		WHERE {
-			SELECT
-				?i ?i_type_signature ?i_type_signature_id
-				?datatype_property_signature ?datatype_property_signature_id
+			SELECT DISTINCT
+				?i ?i_type_signature ?i_type_signature_id ?datatype_key_id
 			WHERE {
 				GRAPH sigdata:graph {
 					?i sig:hasTypeSignature ?i_type_signature.
 					?i_type_signature sig:id ?i_type_signature_id.
 					OPTIONAL {
-						?i sig:hasDatatypePropertySignature ?datatype_property_signature.
-						?datatype_property_signature a sig:DatatypePropertySignature;
-							sig:id ?datatype_property_signature_id.
+						?datatype_path_signature a sig:DatatypePathSignature;
+							sig:id ?datatype_path_signature_id;
+							^sig:hasPathSignature [
+								sig:source ?i;
+								sig:target ?o
+							].
 					}
 				}
+				BIND(CONCAT(' ^^<', STR(DATATYPE(?o)), '>', IF(LANG(?o) != '', CONCAT(' @', LANG(?o)), '')) AS ?o_signature_str)
+				BIND(SHA1(CONCAT(?datatype_path_signature_id, ';', ?o_signature_str)) AS ?datatype_key_id)
 			}
 			ORDER BY
-				?i ?datatype_property_signature_id
+				?i ?datatype_key_id
 		}
 		GROUP BY
 			?i ?i_type_signature ?i_type_signature_id
@@ -245,23 +206,81 @@ WHERE {
 
 };
 
+# Datatype property signatures, one per base node signature and key, with the
+# minimal interval containing the literal counts of its members. A count
+# greater than 5 counts as "more than 5": the minimum is then at most 6 and
+# there is no maximum.
 INSERT {
 	GRAPH sigdata:graph {
+		?datatype_property_signature a sig:DatatypePropertySignature;
+			sig:id ?datatype_property_signature_id;
+			sig:containsDatatypePathSignature ?datatype_path_signature;
+			sig:hasTargetDatatype ?o_type;
+			sig:hasTargetLanguage ?o_lang_if_any;
+			sig:hasMinValueCount ?min_value_count;
+			sig:hasMaxValueCount ?max_value_count.
 		?base_node_signature sig:containsDatatypePropertySignature ?datatype_property_signature
 	}
 }
 WHERE {
 	{
-		SELECT ?base_node_signature (SAMPLE(?i_member) AS ?i)
+		SELECT
+			?base_node_signature ?datatype_path_signature ?datatype_path_signature_id
+			?o_type ?o_lang
+			(MIN(?capped_value_count) AS ?min_value_count)
+			(MAX(?value_count) AS ?max_member_value_count)
 		WHERE {
-			?i_member sig:hasBaseNodeSignature ?base_node_signature
+			{
+				SELECT
+					?i ?datatype_path_signature ?datatype_path_signature_id
+					?o_type ?o_lang
+					(COUNT(DISTINCT ?o) AS ?value_count)
+				WHERE {
+					GRAPH sigdata:graph {
+						?datatype_path_signature a sig:DatatypePathSignature;
+							sig:id ?datatype_path_signature_id;
+							^sig:hasPathSignature [
+								sig:source ?i;
+								sig:target ?o
+							].
+					}
+					BIND(DATATYPE(?o) AS ?o_type)
+					BIND(LANG(?o) AS ?o_lang)
+				}
+				GROUP BY
+					?i ?datatype_path_signature ?datatype_path_signature_id
+					?o_type ?o_lang
+			}
+			GRAPH sigdata:graph {
+				?i sig:hasBaseNodeSignature ?base_node_signature.
+			}
+			BIND(IF(?value_count > 5, 6, ?value_count) AS ?capped_value_count)
 		}
-		GROUP BY ?base_node_signature
+		GROUP BY
+			?base_node_signature ?datatype_path_signature ?datatype_path_signature_id
+			?o_type ?o_lang
 	}
+	VALUES ?undef {UNDEF}
+	BIND(IF(?max_member_value_count > 5, ?undef, ?max_member_value_count) AS ?max_value_count)
+	BIND(CONCAT(STR(?min_value_count), '..', COALESCE(STR(?max_value_count), '*')) AS ?interval_str)
+	BIND(CONCAT(' ^^<', STR(?o_type), '>', IF(?o_lang != '', CONCAT(' @', ?o_lang), '')) AS ?o_signature_str)
+	BIND(IF(?o_lang != '', ?o_lang, ?undef) AS ?o_lang_if_any)
+	BIND(SHA1(CONCAT(SHA1(CONCAT(?datatype_path_signature_id, ';', ?o_signature_str)), ';', ?interval_str)) AS ?datatype_property_signature_id)
+	BIND(IRI(CONCAT(STR(sigs:), 'datatype-properties/', ENCODE_FOR_URI(?datatype_property_signature_id))) AS ?datatype_property_signature)
+};
+
+INSERT {
 	GRAPH sigdata:graph {
 		?i sig:hasDatatypePropertySignature ?datatype_property_signature
 	}
+}
+WHERE {
+	GRAPH sigdata:graph {
+		?i sig:hasBaseNodeSignature ?base_node_signature.
+		?base_node_signature sig:containsDatatypePropertySignature ?datatype_property_signature.
+	}
 };
+
 
 INSERT {
 	GRAPH sigdata:graph {
